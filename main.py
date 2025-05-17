@@ -27,7 +27,8 @@ load_dotenv()
 # Using gemini-1.5-flash-latest as a stable and capable model for this task.
 # The user's log showed "gemini-2.5-flash-preview-04-17", we can switch back if needed,
 # but 1.5-flash is generally recommended for cost/performance balance.
-MODEL_NAME = "gemini-1.5-flash-latest" 
+MODEL_NAME = "gemini-2.0-flash-lite"
+CUSTOMS_ASSIGNMENT_MODEL_NAME = "gemini-2.0-flash-lite"
 
 def load_product_weights(file_path="data/product_weight.csv"):
     """
@@ -64,6 +65,51 @@ def load_product_weights(file_path="data/product_weight.csv"):
         return {}
     except Exception as e:
         print(f"Error loading product weights from {file_path}: {e}")
+        return {}
+
+def load_customs_tariff_codes(file_path="data/col_sadz.csv"):
+    """
+    Loads customs tariff codes and their descriptions from a CSV file.
+    Assumes CSV format: col_sadz;Popis
+    """
+    print(f"DEBUG: Attempting to load customs codes from: {file_path}") # New debug print
+    customs_codes = {}
+    try:
+        with open(file_path, mode='r', encoding='utf-8-sig') as csvfile: # Changed to utf-8-sig to handle BOM
+            reader = csv.reader(csvfile, delimiter=';')
+            header = next(reader) # Skip header row
+            expected_header = ["col_sadz", "Popis"]
+            # Normalize header for comparison (e.g., remove BOM if not handled by utf-8-sig)
+            normalized_header = [h.lstrip('\ufeff') for h in header]
+
+            if normalized_header != expected_header:
+                print(f"Warning: Unexpected header in {file_path}: {header} (normalized: {normalized_header}). Expected {expected_header}. Proceeding with caution.")
+
+            for row_num, row in enumerate(reader, 2): # Start row_num from 2 for messages
+                if len(row) == 2:
+                    code_raw = row[0].strip()
+                    description = row[1].strip()
+                    code = code_raw.replace(" ", "") # Normalize code by removing spaces
+                    
+                    if code and description: # Ensure neither is empty
+                        if not re.fullmatch(r"[0-9]+", code):
+                            print(f"Warning: Invalid characters in customs code '{code_raw}' (normalized to '{code}') in {file_path} at row {row_num}. Expected digits only. Skipping this item.")
+                            continue
+                        customs_codes[code] = description
+                    else:
+                        if not code_raw: print(f"Warning: Missing col_sadz in {file_path} at row {row_num}. Skipping this row.")
+                        # Check original code_raw for missing description message
+                        if not description and code_raw: print(f"Warning: Missing Popis for col_sadz '{code_raw}' in {file_path} at row {row_num}. Skipping this item.")
+                elif row: # If row is not empty but doesn't have 2 columns
+                    print(f"Warning: Skipping malformed row (expected 2 columns, got {len(row)}) in {file_path} at row {row_num}: {row}")
+        print(f"Successfully loaded {len(customs_codes)} customs tariff codes from {file_path}")
+        print(f"DEBUG: Loaded customs codes map: {customs_codes}") # Uncommented for debugging
+        return customs_codes
+    except FileNotFoundError:
+        print(f"Error: Customs tariff codes file not found at {file_path}. Customs code assignment will be impacted.")
+        return {}
+    except Exception as e:
+        print(f"Error loading customs tariff codes from {file_path}: {type(e).__name__} - {e}") # More specific error
         return {}
 
 def pdf_to_images(pdf_path, output_folder="pdf_images"):
@@ -186,11 +232,14 @@ def process_gemini_response_to_csv_rows(gemini_json_data, page_number, product_w
             "Page Number": page_number,
             "Invoice Number": "PARSING FAILED",
             "Item Name": gemini_json_data.get("details", error_message),
+            "description": "",
             "Location": "",
             "Quantity": "",
             "Unit Price": "",
             "Total Price": "",
-            "Total Net Weight": "" # Add placeholder for new column
+            "Total Net Weight": "",
+            "Colný kód": "",
+            "Popis colného kódu": ""
         })
         return items_for_csv
 
@@ -203,7 +252,10 @@ def process_gemini_response_to_csv_rows(gemini_json_data, page_number, product_w
             "Page Number": page_number,
             "Invoice Number": invoice_number if invoice_number else "N/A",
             "Item Name": "Error: 'items' field from AI was not a list.",
-            "Location": "", "Quantity": "", "Unit Price": "", "Total Price": "", "Total Net Weight": ""
+            "description": "",
+            "Location": "", "Quantity": "", "Unit Price": "", "Total Price": "", "Total Net Weight": "",
+            "Colný kód": "",
+            "Popis colného kódu": ""
         })
         return items_for_csv
 
@@ -213,7 +265,10 @@ def process_gemini_response_to_csv_rows(gemini_json_data, page_number, product_w
             "Page Number": page_number,
             "Invoice Number": invoice_number if invoice_number else "NOT FOUND",
             "Item Name": "No items found on this page.",
-            "Location": "", "Quantity": "", "Unit Price": "", "Total Price": "", "Total Net Weight": ""
+            "description": "",
+            "Location": "", "Quantity": "", "Unit Price": "", "Total Price": "", "Total Net Weight": "",
+            "Colný kód": "",
+            "Popis colného kódu": ""
         })
         return items_for_csv
 
@@ -245,14 +300,113 @@ def process_gemini_response_to_csv_rows(gemini_json_data, page_number, product_w
             "Page Number": page_number,
             "Invoice Number": invoice_number,
             "Item Name": item_code,
+            "description": item.get("description") or "",
             "Location": item.get("location") or "",
             "Quantity": quantity_str,
             "Unit Price": item.get("unit_price") or "",
             "Total Price": item.get("total_price") or "",
-            "Total Net Weight": total_net_weight_val
+            "Total Net Weight": total_net_weight_val,
+            "Colný kód": "",
+            "Popis colného kódu": ""
         })
     
     return items_for_csv
+
+# Placeholder for the new AI model for customs code assignment
+# We can make this configurable later (e.g., from .env or constants)
+# CUSTOMS_ASSIGNMENT_MODEL_NAME is already defined at the top
+
+def assign_customs_code_with_ai(item_details, all_customs_codes_map, genai_model_instance):
+    """
+    Assigns a customs code to an item using a generative AI model.
+
+    Args:
+        item_details (dict): Dictionary containing item details like 
+                             'item_code', 'description', 'location'.
+        all_customs_codes_map (dict): A dictionary of all available customs codes 
+                                   and their descriptions {code: description}.
+        genai_model_instance: An initialized generative model instance (e.g., from genai.GenerativeModel()).
+
+    Returns:
+        str: The assigned customs code (e.g., '85444920') or 'NEURCENE' if unable to determine.
+    """
+    if not item_details.get("description"):
+        print(f"    Item {item_details.get('item_code', 'N/A')} has no description. Skipping AI customs code assignment, setting to NEURCENE.")
+        return "NEURCENE"
+
+    customs_codes_for_prompt = []
+    if all_customs_codes_map:
+        for code, desc in all_customs_codes_map.items():
+            customs_codes_for_prompt.append(f"- Kód: {code}, Popis: {desc}")
+    
+    customs_codes_text = "\\n".join(customs_codes_for_prompt)
+    if not customs_codes_text:
+        customs_codes_text = "Zoznam colných kódov nebol poskytnutý."
+
+    prompt = (
+        "Si expert na colnú klasifikáciu tovaru pre spoločnosť zaoberajúcu sa bezpečnostnými a alarmovými systémami. "
+        "Na základe nasledujúcich detailov položky:\\n"
+        f"- Kód položky: {item_details.get('item_code', 'N/A')}\\n"
+        f"- Popis položky: {item_details.get('description', 'Žiadny popis')}\\n"
+        f"- Krajina pôvodu: {item_details.get('location', 'N/A')}\\n\\n"
+        "A nasledujúceho zoznamu dostupných colných sadzobníkov a ich popisov:\\n"
+        f"{customs_codes_text}\\n\\n"
+        "Tvojou úlohou je vybrať JEDEN najvhodnejší 8-miestny kód colného sadzobníka (col_sadz) pre túto položku. "
+        "Ber na vedomie, že veľa produktov spoločnosti (rôzne typy detektorov, senzorov, čidiel, sirén, ústrední alarmov, klávesníc) typicky patrí pod kód \'85311030\' (Poplachové zabezpečovacie systémy na ochranu budov). "
+        "Ak popis položky silno naznačuje, že ide o takýto komponent alarmového systému, uprednostni kód \'85311030\'. "
+        "Pre ostatné položky (napr. káble, batérie, transformátory, montážny materiál) vyber najpresnejší kód podľa ich povahy. "
+        "Zameraj sa na presnú zhodu s popisom položky a charakteristikami tovaru. "
+        "Dôkladne zváž každý kód a jeho popis vo vzťahu k položke. Vysvetli stručne svoj postup v pár bodoch a na konci uveď iba samotný 8-miestny kód na novom riadku za textom 'VYSLEDNY_KOD: '.\\n"
+        "Napríklad:\\n"
+        "Zdôvodnenie: Položka je detektor pohybu, čo je súčasť alarmového systému.\\n"
+        "VYSLEDNY_KOD: 85311030\\n\\n"
+        "ALEBO\\n"
+        "Zdôvodnenie: Položka je kábel.\\n"
+        "VYSLEDNY_KOD: 85444920\\n\\n"
+        "Ak nie je možné nájsť žiadny jednoznačne vhodný kód na základe poskytnutých informácií, alebo ak popis položky nie je dostatočný na jednoznačné určenie, vysvetli prečo a uveď VYSLEDNY_KOD: NEURCENE."
+    )
+
+    # print(f"    DEBUG: Prompt pre AI na priradenie colneho kodu:\\n{prompt}")
+
+    try:
+        response = genai_model_instance.generate_content(prompt)
+        raw_response_text = response.text.strip()
+        print(f"    DEBUG: Raw AI response for customs code assignment:\n{raw_response_text}") # Log raw response
+
+        # Try to extract the code after "VYSLEDNY_KOD: "
+        # Regex made more flexible for whitespace and potential newlines around the code itself.
+        code_match = re.search(r"VYSLEDNY_KOD:\s*([0-9]{8}|NEURCENE)", raw_response_text, re.IGNORECASE | re.DOTALL)
+        
+        assigned_code = "NEURCENE" # Default
+
+        if code_match:
+            extracted_value = code_match.group(1).strip()
+            print(f"    DEBUG: Regex matched. Extracted value: '{extracted_value}'")
+            if re.fullmatch(r"[0-9]{8}", extracted_value):
+                if extracted_value in all_customs_codes_map:
+                    assigned_code = extracted_value
+                    print(f"    INFO: AI assigned valid code: {assigned_code}")
+                else:
+                    print(f"    WARNING: AI returned code '{extracted_value}' which is a valid 8-digit format BUT NOT in the known customs list. Treating as NEURCENE.")
+                    print(f"    Full AI reasoning: {raw_response_text}")
+                    # assigned_code remains NEURCENE (default)
+            elif extracted_value.upper() == "NEURCENE":
+                assigned_code = "NEURCENE"
+                print(f"    INFO: AI explicitly assigned NEURCENE.")
+            else:
+                print(f"    WARNING: Regex extracted '{extracted_value}' which is neither 8-digit code nor NEURCENE. Treating as NEURCENE.")
+                print(f"    Full AI reasoning: {raw_response_text}")
+                # assigned_code remains NEURCENE (default)
+        else:
+            print(f"    WARNING: Regex did not find 'VYSLEDNY_KOD: XXXXXXXX' or 'VYSLEDNY_KOD: NEURCENE' in the AI response. Treating as NEURCENE.")
+            print(f"    Full AI reasoning: {raw_response_text}")
+            # assigned_code remains NEURCENE (default)
+        
+        return assigned_code
+
+    except Exception as e:
+        print(f"    Error during AI customs code assignment: {e}")
+        return "NEURCENE"
 
 def main():
     pdf_input_directory = "data"  # Directory containing PDFs
@@ -271,6 +425,17 @@ def main():
     if not product_weights:
         print("Continuing without net weight calculations as product weights could not be loaded.")
 
+    # Load customs tariff codes
+    customs_tariff_map = load_customs_tariff_codes() # Default path "data/col_sadz.csv"
+    if not customs_tariff_map:
+        print("CRITICAL ERROR: Customs tariff codes could not be loaded from 'data/col_sadz.csv'.")
+        print("This is essential for the script to function correctly. Please check the file and error messages above.")
+        print("Exiting script.")
+        return # Exit main function, effectively stopping the script
+    else:
+        print(f"Successfully loaded and using {len(customs_tariff_map)} customs codes.") # Confirmation
+        print(f"DEBUG customs_tariff_map in main: {customs_tariff_map}") # For debugging
+
     api_key = os.getenv("GOOGLE_API_KEY")
     if not api_key:
         print("Error: GOOGLE_API_KEY not found in environment variables. Please set it in your .env file.")
@@ -278,8 +443,15 @@ def main():
     try:
         genai.configure(api_key=api_key)
         print("Google API Key configured.")
+        # Initialize the model for page analysis
+        page_analysis_model = genai.GenerativeModel(MODEL_NAME)
+        print(f"Initialized page analysis model: {MODEL_NAME}")
+        # Initialize the model for customs code assignment
+        customs_assignment_model = genai.GenerativeModel(CUSTOMS_ASSIGNMENT_MODEL_NAME)
+        print(f"Initialized customs assignment model: {CUSTOMS_ASSIGNMENT_MODEL_NAME}")
+
     except Exception as e:
-        print(f"Error configuring Google API Key: {e}")
+        print(f"Error configuring Google API Key or initializing models: {e}")
         return
 
     pdf_file_paths = glob.glob(os.path.join(pdf_input_directory, "*.pdf"))
@@ -307,20 +479,20 @@ def main():
             print("Neplatná voľba. Zadajte prosím 1 alebo 2.")
 
     # This prompt is used for all PDFs and all pages
-    extraction_prompt = (
-        "Analyze the invoice page. Extract the overall invoice number. "
-        "Then, identify all line items. For each line item, extract its item code (e.g., CC-01, JA-103K-7AH), "
-        "location, quantity, unit price, and total price. The item's textual description is secondary but can be extracted if easily available. "
-        "Return the information as a single JSON object. The JSON object should have two top-level keys: "
-        "1. 'invoice_number': A string for the invoice number (use null if not found). "
-        "2. 'items': A list of objects, where each object represents a line item and has the following keys: "
-        "'item_code' (string, e.g., CC-01), 'location' (string), 'quantity' (string or number), "
-        "'unit_price' (string or number), 'total_price' (string or number). You may also include 'description' if it's distinct and useful. "
-        "If an item is missing one of these primary fields (item_code, location, quantity, unit_price, total_price), use an empty string or null. "
-        "If no line items are found on the page, 'items' should be an empty list. "
-        "Ensure the entire output is a valid JSON. Example item object (within the 'items' list): "
-        "{\"item_code\": \"CC-01\", \"location\": \"SK\", \"quantity\": \"2.00\", \"unit_price\": \"86.73\", \"total_price\": \"173.46\"}"
-    )
+    extraction_prompt = f"""Analyze the invoice page. Extract the overall invoice number. \
+Then, identify all line items. For each line item, extract its item code (e.g., CC-01, JA-103K-7AH), \
+its textual description (this is important, extract as 'description'), \
+location, quantity, unit price, and total price. \
+Return the information as a single JSON object. The JSON object should have two top-level keys: \
+1. 'invoice_number': A string for the invoice number (use null if not found). \
+2. 'items': A list of objects, where each object represents a line item and has the following keys: \
+'item_code' (string, e.g., CC-01), 'description' (string, textual description of the item), \
+'location' (string), 'quantity' (string or number), \
+'unit_price' (string or number), 'total_price' (string or number). \
+If an item is missing one of these primary fields (item_code, description, location, quantity, unit_price, total_price), use an empty string or null. \
+If no line items are found on the page, 'items' should be an empty list. \
+Ensure the entire output is a valid JSON. Example item object (within the 'items' list): \
+{{\\\"item_code\\\": \\\"CC-01\\\", \\\"description\\\": \\\"Network Cable UTP Cat6 5m\\\", \\\"location\\\": \\\"SK\\\", \\\"quantity\\\": \\\"2.00\\\", \\\"unit_price\\\": \\\"86.73\\\", \\\"total_price\\\": \\\"173.46\\\"}}"""
     
     master_data_from_all_pdfs = [] # To store processed data from all PDFs
     first_pdf_processed = True # Flag to control separator for single CSV
@@ -347,7 +519,10 @@ def main():
                     "Page Number": "",
                     "Row Number": "",
                     "Item Name": f"Failed to convert {pdf_filename} to images",
-                    "Location": "", "Quantity": "", "Unit Price": "", "Total Price": "", "Total Net Weight": ""
+                    "description": "",
+                    "Location": "", "Quantity": "", "Unit Price": "", "Total Price": "", "Total Net Weight": "",
+                    "Colný kód": "",
+                    "Popis colného kódu": ""
                 })
             continue
 
@@ -360,7 +535,10 @@ def main():
                 "Page Number": "---",
                 "Row Number": "---",
                 "Item Name": f"--- NEW INVOICE: {pdf_filename} ---",
-                "Location": "---", "Quantity": "---", "Unit Price": "---", "Total Price": "---", "Total Net Weight": "---"
+                "description": "---",
+                "Location": "---", "Quantity": "---", "Unit Price": "---", "Total Price": "---", "Total Net Weight": "---",
+                "Colný kód": "---",
+                "Popis colného kódu": "---"
             })
         first_pdf_processed = False # Reset for subsequent PDFs if single output
 
@@ -369,9 +547,37 @@ def main():
             print(f"Analyzing page {page_counter_for_pdf} of {pdf_filename} (image: {os.path.basename(image_path)})...")
             gemini_response = analyze_image_with_gemini(image_path, extraction_prompt)
             
-            # Pass the relative page number for the current PDF and the product weights
-            processed_page_items = process_gemini_response_to_csv_rows(gemini_response, page_counter_for_pdf, product_weights)
-            all_items_from_current_pdf.extend(processed_page_items)
+            processed_page_items_raw = process_gemini_response_to_csv_rows(gemini_response, page_counter_for_pdf, product_weights)
+            
+            processed_page_items_with_customs = []
+            for item_data_raw in processed_page_items_raw:
+                item_data = dict(item_data_raw)
+
+                is_data_row = True
+                if (item_data.get("Invoice Number") in ["PARSING FAILED", "CONVERSION FAILED"] or \
+                    "Error:" in item_data.get("Item Name", "") or \
+                    "No items found" in item_data.get("Item Name", "")):
+                    is_data_row = False
+
+                if is_data_row and item_data.get("Item Name"): 
+                    current_item_details = {
+                        "item_code": item_data.get("Item Name"),
+                        "description": item_data.get("description"), 
+                        "location": item_data.get("Location")
+                    }
+                    
+                    assigned_customs_code = assign_customs_code_with_ai(current_item_details, customs_tariff_map, customs_assignment_model)
+                    customs_code_description = customs_tariff_map.get(assigned_customs_code, "Popis nenájdený") if assigned_customs_code != "NEURCENE" else ""
+                    
+                    item_data["Colný kód"] = assigned_customs_code
+                    item_data["Popis colného kódu"] = customs_code_description
+                    processed_page_items_with_customs.append(item_data)
+                else:
+                    item_data["Colný kód"] = item_data.get("Colný kód", "") 
+                    item_data["Popis colného kódu"] = item_data.get("Popis colného kódu", "")
+                    processed_page_items_with_customs.append(item_data)
+            
+            all_items_from_current_pdf.extend(processed_page_items_with_customs)
             page_counter_for_pdf += 1
 
         # Add row numbers for the items extracted from the current PDF
@@ -395,8 +601,7 @@ def main():
         if user_choice_internal == 'single':
             master_data_from_all_pdfs.extend(items_from_current_pdf_with_row_numbers)
         elif user_choice_internal == 'separate':
-            # Define headers for CSV
-            headers = ["Invoice Number", "Page Number", "Row Number", "Item Name", "Location", "Quantity", "Unit Price", "Total Price", "Total Net Weight"]
+            headers = ["Invoice Number", "Page Number", "Row Number", "Item Name", "description", "Location", "Quantity", "Unit Price", "Total Price", "Total Net Weight", "Colný kód", "Popis colného kódu"]
             individual_csv_filename = os.path.join(data_output_directory, f"{pdf_name_without_ext}_extracted.csv")
             print(f"Writing extracted data for {pdf_filename} to {individual_csv_filename}...")
             
@@ -422,7 +627,10 @@ def main():
                             "Page Number": "", 
                             "Row Number": "", 
                             "Item Name": f"No data extracted or conversion failed for {pdf_filename}",
-                            "Location": "", "Quantity": "", "Unit Price": "", "Total Price": "", "Total Net Weight": ""
+                            "description": "",
+                            "Location": "", "Quantity": "", "Unit Price": "", "Total Price": "", "Total Net Weight": "",
+                            "Colný kód": "",
+                            "Popis colného kódu": ""
                         })
                     print(f"Wrote empty/placeholder CSV for {pdf_filename} to {individual_csv_filename} as no data was extracted or conversion failed.")
                 except IOError as e:
@@ -432,8 +640,7 @@ def main():
     # CSV Writing Logic - now conditional
     if user_choice_internal == 'single':
         if master_data_from_all_pdfs:
-            # Define headers for CSV
-            headers = ["Invoice Number", "Page Number", "Row Number", "Item Name", "Location", "Quantity", "Unit Price", "Total Price", "Total Net Weight"]
+            headers = ["Invoice Number", "Page Number", "Row Number", "Item Name", "description", "Location", "Quantity", "Unit Price", "Total Price", "Total Net Weight", "Colný kód", "Popis colného kódu"]
             print(f"\\nWriting all extracted data to {combined_csv_output_file}...")
             try:
                 with open(combined_csv_output_file, 'w', newline='', encoding='utf-8') as csvfile:
@@ -446,7 +653,7 @@ def main():
         else:
             print("\\nNo data was extracted from any PDF to write to the combined CSV file.")
             # Optionally, create an empty CSV with headers
-            headers = ["Invoice Number", "Page Number", "Row Number", "Item Name", "Location", "Quantity", "Unit Price", "Total Price", "Total Net Weight"]
+            headers = ["Invoice Number", "Page Number", "Row Number", "Item Name", "description", "Location", "Quantity", "Unit Price", "Total Price", "Total Net Weight", "Colný kód", "Popis colného kódu"]
             try:
                 with open(combined_csv_output_file, 'w', newline='', encoding='utf-8') as csvfile:
                     writer = csv.DictWriter(csvfile, fieldnames=headers)
@@ -454,7 +661,10 @@ def main():
                     writer.writerow({
                         "Invoice Number": "NO DATA", "Page Number": "", "Row Number": "",
                         "Item Name": "No data extracted from any PDF files.", 
-                        "Location": "", "Quantity": "", "Unit Price": "", "Total Price": "", "Total Net Weight": ""
+                        "description": "",
+                        "Location": "", "Quantity": "", "Unit Price": "", "Total Price": "", "Total Net Weight": "",
+                        "Colný kód": "",
+                        "Popis colného kódu": ""
                     })
                 print(f"Created an empty placeholder CSV: {combined_csv_output_file}")
             except IOError as e:
