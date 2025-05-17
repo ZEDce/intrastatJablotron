@@ -149,4 +149,4 @@ To vedie k odhadovaným nákladom približne **0,00018 $ na jednu PDF stránku**
 *   Toto sú odhady. Skutočné náklady sa môžu líšiť v závislosti od rozlíšenia/detailu obrázka, dĺžky výzvy a objemu extrahovaných dát.
 *   Google ponúka bezplatnú úroveň pre Gemini API, ktorá má limity použitia. Pri rozsiahlom používaní budete pravdepodobne na platenej úrovni.
 *   Odporúča sa sledovať vaše využitie a fakturáciu v Google Cloud Console.
-*   Ceny sa môžu meniť. Vždy si overte aktuálne informácie na oficiálnej stránke cien Google AI. 
+*   Ceny sa môžu meniť. Vždy si overte aktuálne informácie na oficiálnej stránke cien Google AI.
