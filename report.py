@@ -77,19 +77,61 @@ def generate_single_report(input_csv_path, output_csv_name, df_sadz):
             return
 
     # Convert numerical columns to numeric, coercing errors
+    # Define a list of expected non-numeric strings that should not trigger a warning
+    # These typically come from main.py for weights when data is missing/problematic
+    expected_non_numeric_placeholders = [
+        "NENÁJDENÉ", "CHYBA_QTY", "CHÝBAJÚ_DÁTA_HMOTNOSTI", 
+        "CHÝBA_KÓD_PRE_HMOTNOSŤ", "NOT_IN_AI_RESP", "AI_JSON_DECODE_ERR",
+        "AI_BAD_FORMAT_NON_LIST", "AI_EXCEPTION", "ERROR", "AI_SKIP_NO_VALID_ITEMS",
+        "ERR_GROSS_LT_NET", "ERR_NEGATIVE", "ERR_CONVERT", "ERR_AI_KEY_MISSING", "N/A"
+    ]
+    # Include variants that might appear in CSV due to errors or AI responses (e.g. with _ERR_ suffix from main.py)
+    # This list can be expanded as needed.
+
     for col in numeric_cols:
         # Store original for comparison/warning
         original_series = df[col].copy()
 
         # If the column is of object type (likely string), attempt to replace comma with dot
         if df[col].dtype == 'object':
+            # First, explicitly replace known placeholders with NaN before general comma replacement
+            # This avoids issues if a placeholder itself contains a comma.
+            # We will convert these NaNs to 0.0 later without warning.
+            for placeholder in expected_non_numeric_placeholders:
+                df[col] = df[col].replace(placeholder, pd.NA) # Replace with pandas NA
+            
+            # Now, replace commas for actual numbers
             df[col] = df[col].str.replace(',', '.', regex=False)
 
         df[col] = pd.to_numeric(df[col], errors='coerce')
-        # Identify rows where coercion introduced NaNs (meaning original was not numeric)
+        
+        # Identify rows where coercion introduced NaNs
+        # but the original value was not one of our expected placeholders.
         coerced_errors = original_series[df[col].isna() & original_series.notna()]
         for index, val in coerced_errors.items():
-            print(f"Warning: Non-numeric value '{val}' found in column '{col}', row {index+2} of {input_csv_path}. Treated as 0.0 for summation.")
+            # Check if the current row corresponds to a discount or fee item
+            # These items might have their 'Colný kód' changed to "Zľava" or "Poplatok"
+            # and their weight/price values might be intentionally non-numeric or zeroed out.
+            is_special_item_row = False
+            if 'Colný kód' in df.columns: # Ensure the column exists before accessing
+                item_type_identifier = df.loc[index, 'Colný kód']
+                if item_type_identifier in ["Zľava", "Poplatok"]:
+                    is_special_item_row = True
+
+            if is_special_item_row:
+                continue # Skip warning for special rows like discount/fee
+
+            # Check if the original value (before any processing in this loop) was an expected placeholder
+            original_value_from_csv = str(original_series.loc[index]).strip()
+            is_expected_placeholder = False
+            for placeholder in expected_non_numeric_placeholders:
+                if original_value_from_csv == placeholder or original_value_from_csv.startswith(placeholder + "_ERR") :
+                    is_expected_placeholder = True
+                    break
+            
+            if not is_expected_placeholder:
+                print(f"Warning: Neočakávaná nečíselná hodnota '{val}' nájdená v stĺpci '{col}', riadok {index+2} súboru {input_csv_path}. Spracovaná ako 0.0 pre sčítanie.")
+        
         df[col] = df[col].fillna(0.0)
 
 

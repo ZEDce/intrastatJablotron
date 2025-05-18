@@ -53,7 +53,7 @@ def load_product_weights(file_path="data/product_weight.csv"):
             reader = csv.reader(csvfile, delimiter=';')
             header = next(reader) # Skip header row
             if header != ["Registrační číslo", "JV Váha komplet SK"]:
-                print(f"Warning: Unexpected header in {file_path}: {header}. Proceeding with caution.")
+                print(f"VAROVANIE: Neočakávaná hlavička v súbore {file_path}: {header}. Pokračuje sa s opatrnosťou.") # Translated
 
             for row_num, row in enumerate(reader, 2): # Start row_num from 2 for messages
                 if len(row) == 2:
@@ -63,19 +63,19 @@ def load_product_weights(file_path="data/product_weight.csv"):
                         try:
                             weights[item_code] = float(weight_str)
                         except ValueError:
-                            print(f"Warning: Could not convert weight '{row[1]}' to float for item_code '{item_code}' in {file_path} at row {row_num}. Skipping this item.")
+                            print(f"VAROVANIE: Nepodarilo sa konvertovať hmotnosť '{row[1]}' na číslo pre kód položky '{item_code}' v súbore {file_path} na riadku {row_num}. Táto položka sa preskakuje.") # Translated
                     else:
-                        if not item_code : print(f"Warning: Missing item_code in {file_path} at row {row_num}. Skipping this row.")
-                        if not weight_str and item_code : print(f"Warning: Missing weight for item_code '{item_code}' in {file_path} at row {row_num}. Skipping this item.")
+                        if not item_code : print(f"VAROVANIE: Chýbajúci kód položky v súbore {file_path} na riadku {row_num}. Tento riadok sa preskakuje.") # Translated
+                        if not weight_str and item_code : print(f"VAROVANIE: Chýbajúca hmotnosť pre kód položky '{item_code}' v súbore {file_path} na riadku {row_num}. Táto položka sa preskakuje.") # Translated
                 elif row: # If row is not empty but doesn't have 2 columns
-                    print(f"Warning: Skipping malformed row (expected 2 columns, got {len(row)}) in {file_path} at row {row_num}: {row}")
-        print(f"Successfully loaded {len(weights)} product weights from {file_path}")
+                    print(f"VAROVANIE: Preskakuje sa nesprávne formátovaný riadok (očakávané 2 stĺpce, nájdené {len(row)}) v súbore {file_path} na riadku {row_num}: {row}") # Translated
+        # print(f"Successfully loaded {len(weights)} product weights from {file_path}") # Removed
         return weights
     except FileNotFoundError:
-        print(f"Error: Product weight file not found at {file_path}. Net weight calculation will be skipped.")
+        print(f"CHYBA: Súbor s hmotnosťami produktov nebol nájdený na ceste: {file_path}. Výpočet čistej hmotnosti bude preskočený.") # Translated
         return {}
     except Exception as e:
-        print(f"Error loading product weights from {file_path}: {e}")
+        print(f"CHYBA pri načítaní produktových hmotností zo súboru {file_path}: {e}") # Translated
         return {}
 
 def load_customs_tariff_codes(file_path="data/col_sadz.csv"):
@@ -83,7 +83,7 @@ def load_customs_tariff_codes(file_path="data/col_sadz.csv"):
     Loads customs tariff codes and their descriptions from a CSV file.
     Assumes CSV format: col_sadz;Popis
     """
-    print(f"DEBUG: Attempting to load customs codes from: {file_path}") # New debug print
+    # print(f"DEBUG: Attempting to load customs codes from: {file_path}") # New debug print # Removed
     customs_codes = {}
     try:
         with open(file_path, mode='r', encoding='utf-8-sig') as csvfile: # Changed to utf-8-sig to handle BOM
@@ -94,7 +94,7 @@ def load_customs_tariff_codes(file_path="data/col_sadz.csv"):
             normalized_header = [h.lstrip('\ufeff') for h in header]
 
             if normalized_header != expected_header:
-                print(f"Warning: Unexpected header in {file_path}: {header} (normalized: {normalized_header}). Expected {expected_header}. Proceeding with caution.")
+                print(f"VAROVANIE: Neočakávaná hlavička v súbore {file_path}: {header} (normalizovaná: {normalized_header}). Očakávaná {expected_header}. Pokračuje sa s opatrnosťou.") # Translated
 
             for row_num, row in enumerate(reader, 2): # Start row_num from 2 for messages
                 if len(row) == 2:
@@ -104,23 +104,23 @@ def load_customs_tariff_codes(file_path="data/col_sadz.csv"):
                     
                     if code and description: # Ensure neither is empty
                         if not re.fullmatch(r"[0-9]+", code):
-                            print(f"Warning: Invalid characters in customs code '{code_raw}' (normalized to '{code}') in {file_path} at row {row_num}. Expected digits only. Skipping this item.")
+                            print(f"VAROVANIE: Neplatné znaky v colnom kóde '{code_raw}' (normalizovaný na '{code}') v súbore {file_path} na riadku {row_num}. Očakávané sú iba číslice. Táto položka sa preskakuje.") # Translated
                             continue
                         customs_codes[code] = description
                     else:
-                        if not code_raw: print(f"Warning: Missing col_sadz in {file_path} at row {row_num}. Skipping this row.")
+                        if not code_raw: print(f"VAROVANIE: Chýbajúci col_sadz v súbore {file_path} na riadku {row_num}. Tento riadok sa preskakuje.") # Translated
                         # Check original code_raw for missing description message
-                        if not description and code_raw: print(f"Warning: Missing Popis for col_sadz '{code_raw}' in {file_path} at row {row_num}. Skipping this item.")
+                        if not description and code_raw: print(f"VAROVANIE: Chýbajúci Popis pre col_sadz '{code_raw}' v súbore {file_path} na riadku {row_num}. Táto položka sa preskakuje.") # Translated
                 elif row: # If row is not empty but doesn't have 2 columns
-                    print(f"Warning: Skipping malformed row (expected 2 columns, got {len(row)}) in {file_path} at row {row_num}: {row}")
-        print(f"Successfully loaded {len(customs_codes)} customs tariff codes from {file_path}")
-        print(f"DEBUG: Loaded customs codes map: {customs_codes}") # Uncommented for debugging
+                    print(f"VAROVANIE: Preskakuje sa nesprávne formátovaný riadok (očakávané 2 stĺpce, nájdené {len(row)}) v súbore {file_path} na riadku {row_num}: {row}") # Translated
+        # print(f"Successfully loaded {len(customs_codes)} customs tariff codes from {file_path}") # Removed
+        # print(f"DEBUG: Loaded customs codes map: {customs_codes}") # Uncommented for debugging # Removed
         return customs_codes
     except FileNotFoundError:
-        print(f"Error: Customs tariff codes file not found at {file_path}. Customs code assignment will be impacted.")
+        print(f"CHYBA: Súbor s colnými kódmi nebol nájdený na ceste: {file_path}. Priradenie colných kódov bude ovplyvnené.") # Translated
         return {}
     except Exception as e:
-        print(f"Error loading customs tariff codes from {file_path}: {type(e).__name__} - {e}") # More specific error
+        print(f"CHYBA pri načítaní colných kódov zo súboru {file_path}: {type(e).__name__} - {e}") # Translated (added more specific error type)
         return {}
 
 def pdf_to_images(pdf_path, output_folder="pdf_images"):
@@ -147,10 +147,9 @@ def pdf_to_images(pdf_path, output_folder="pdf_images"):
             pix.save(image_path)
             image_paths.append(image_path)
         doc.close()
-        print(f"Successfully converted {len(image_paths)} pages from '{pdf_path}' to images in '{output_folder}'.")
         return image_paths
     except Exception as e:
-        print(f"Error converting PDF '{pdf_path}' to images: {e}")
+        print(f"CHYBA pri konverzii PDF '{pdf_path}' na obrázky: {e}") # Translated
         return []
 
 def analyze_image_with_gemini(image_path, prompt):
@@ -161,26 +160,21 @@ def analyze_image_with_gemini(image_path, prompt):
     try:
         model = genai.GenerativeModel(MODEL_NAME)
 
-        print(f"Reading image {image_path} as bytes...")
         with open(image_path, 'rb') as f:
             image_bytes = f.read()
 
         mime_type = "image/png"  # Assuming PNG from pdf_to_images
 
-        print(f"Attempting to analyze {image_path} (inline data) with {MODEL_NAME}...")
-        
         image_part = {
             "mime_type": mime_type,
             "data": image_bytes
         }
 
-        # Generate content with safety settings if needed, though default should be fine for invoices
         response = model.generate_content([image_part, prompt])
         response.resolve() 
         
         if response.candidates and response.candidates[0].content.parts:
             raw_text_response = response.text
-            print(f"Raw Gemini response for {image_path}:\\n{raw_text_response}") # Log raw response
             
             # Attempt to clean and parse JSON
             # Gemini might wrap JSON in ```json ... ```
@@ -196,16 +190,16 @@ def analyze_image_with_gemini(image_path, prompt):
                 parsed_json = json.loads(cleaned_json_text)
                 return parsed_json
             except json.JSONDecodeError as je:
-                print(f"JSONDecodeError for {image_path}: {je}. Raw text was: '{cleaned_json_text}'")
-                return {"error": "Failed to decode JSON response", "details": str(je), "raw_text": raw_text_response}
+                print(f"CHYBA DEKÓDOVANIA JSON pre {image_path}: {je}. Surový text bol: '{cleaned_json_text}'") # Translated
+                return {"error": "Nepodarilo sa dekódovať JSON odpoveď", "details": str(je), "raw_text": raw_text_response} # Translated error message
         else:
-            print(f"Warning: Gemini API returned no content or unexpected structure for {image_path}.")
+            print(f"VAROVANIE: Gemini API nevrátilo žiadny obsah alebo malo neočakávanú štruktúru pre {image_path}.") # Translated
             if hasattr(response, 'prompt_feedback'):
-                print(f"Prompt Feedback: {response.prompt_feedback}")
-            return {"error": "Gemini API returned no content."}
+                print(f"Spätná väzba k promptu: {response.prompt_feedback}") # Translated
+            return {"error": "Gemini API nevrátilo žiadny obsah."} # Translated error message
 
     except Exception as e:
-        print(f"Error analyzing image {image_path} with Gemini: {e}")
+        print(f"CHYBA pri analýze obrázka {image_path} pomocou Gemini: {e}") # Translated
         # Add more detailed error logging if available
         error_detail = str(e)
         if hasattr(e, 'response') and hasattr(e.response, 'text'):
@@ -260,7 +254,7 @@ def process_gemini_response_to_csv_rows(gemini_json_data, page_number, product_w
     items = gemini_json_data.get("items", [])
     
     if not items: # If items list is empty or not present
-        print(f"Page {page_number}: No items found in Gemini response for invoice {invoice_number}.")
+        print(f"Strana {page_number}: V Gemini odpovedi pre faktúru {invoice_number} neboli nájdené žiadne položky.") # Translated
         items_for_csv.append({
             "Page Number": page_number,
             "Invoice Number": invoice_number,
@@ -279,43 +273,143 @@ def process_gemini_response_to_csv_rows(gemini_json_data, page_number, product_w
         return items_for_csv
 
     for item in items:
-        # item_name = item.get("item_name", "N/A") # Original: Use item_name as per user's prompt
-        # description = item.get("description", "") # Original: Added description field
-
-        # New logic:
-        # This will go into CSV "Item Name" (this is the product code like JA-XXXX)
         raw_item_code = item.get("item_code")
-        gemini_item_name_for_id = item.get("item_name", "N/A") # Get Gemini's item_name, default to N/A
+        gemini_item_name_for_id = item.get("item_name", "N/A")
 
-        if raw_item_code is None or str(raw_item_code).lower() == "null": # Check for None or string "null"
-            # If item_code is null/None, use Gemini's item_name as the identifier (e.g., "SLEVA", "DOPRAVA")
+        if raw_item_code is None or str(raw_item_code).lower() == "null" or str(raw_item_code).strip() == "":
             csv_item_identifier = gemini_item_name_for_id
         else:
-            # Otherwise, use the provided item_code
-            csv_item_identifier = str(raw_item_code) # Ensure it's a string
+            csv_item_identifier = str(raw_item_code)
 
-        # This is the descriptive name from Gemini (e.g., "Ústředna s rádiovým modulem")
-        gemini_item_name_desc = item.get("item_name", "")  
-        # Additional details from Gemini (e.g., "(recyklační příspěvek...)" or "Sleva zákazníkovi...")
-        gemini_item_details = item.get("description", "") 
+        gemini_item_name_desc = item.get("item_name", "")
+        gemini_item_details = item.get("description", "")
 
-        # Construct the final description for the CSV by combining Gemini's item_name and description
         final_csv_description = gemini_item_name_desc
-        if gemini_item_name_desc and gemini_item_details: # If both exist, combine with " - "
-             final_csv_description = f"{gemini_item_name_desc} - {gemini_item_details}"
-        elif gemini_item_details: # Only details exist
+        if gemini_item_name_desc and gemini_item_details:
+            final_csv_description = f"{gemini_item_name_desc} - {gemini_item_details}"
+        elif gemini_item_details:
             final_csv_description = gemini_item_details
-        # If only gemini_item_name_desc exists, it's already set. If both are empty, it remains empty.
-        
-        # This is the item_code used for weight lookup. Should use the actual code if available.
-        # For "SLEVA", "DOPRAVA" this will be None, and weight lookup will be skipped (correct).
+
         item_code_for_weight_lookup = raw_item_code if raw_item_code is not None and str(raw_item_code).lower() != "null" else None
 
         quantity = item.get("quantity", 0)
-        # location = item.get("location", "") # Already present
-        location = item.get("location", "") 
+        location_from_ai = item.get("location") # This will be 'NOT_ON_IMAGE', a country code, None, or N/A
         unit_price = item.get("unit_price", 0.0)
         total_price = item.get("total_price", 0.0)
+
+        # --- Product identification and location input logic --- 
+        is_product = True # Default assumption
+
+        non_product_keywords = ["sleva", "zľava", "doprava", "preprava", "poplatek", "manipulační", "discount", "shipping", "fee", "handling"]
+        
+        raw_item_code_str = str(raw_item_code).strip() if raw_item_code is not None else ""
+        raw_item_code_lower = raw_item_code_str.lower()
+        
+        item_name_lower_for_check = str(gemini_item_name_for_id).lower() # item_name from AI
+        item_details_lower_for_check = str(gemini_item_details).lower() # description from AI
+
+        has_specific_item_code = raw_item_code_str != "" and raw_item_code_lower not in ["null", "n/a"]
+
+        # 1. Check if AI name/description strongly suggests non-product
+        ai_suggests_non_product = False
+        for keyword in non_product_keywords:
+            if keyword in item_name_lower_for_check or keyword in item_details_lower_for_check:
+                ai_suggests_non_product = True
+                break
+        
+        # 2. Determine 'is_product'
+        if has_specific_item_code:
+            # If there's a specific item code, it's generally a product.
+            # An exception is if the item_code ITSELF is a non-product keyword (e.g. code="DOPRAVA")
+            item_code_is_itself_non_product = False
+            for keyword in non_product_keywords:
+                if keyword == raw_item_code_lower: # Exact match of item_code
+                    item_code_is_itself_non_product = True
+                    break
+            
+            if item_code_is_itself_non_product:
+                is_product = False
+            else:
+                # Has a specific code that is NOT a non-product keyword itself.
+                # Even if AI name contains keywords, the specific code implies product.
+                is_product = True
+        else: # No specific item_code
+            if ai_suggests_non_product:
+                is_product = False
+            else:
+                # No specific code, and AI doesn't suggest non-product.
+                # Could be a product with missing code, or genuinely not a product.
+                # Defaulting to True here means we might ask for country for items like "Poznámka",
+                # but it's safer for actual products with missing codes.
+                # The user can always press Enter if country is not applicable.
+                is_product = True
+        
+        # Original refinement logic - can be removed or commented out as new logic is more comprehensive
+        # if (raw_item_code is None or str(raw_item_code).lower() == "null" or str(raw_item_code).strip() == "" or str(raw_item_code).upper() == "N/A") and not is_product:
+        #      pass 
+        # elif (raw_item_code is None or str(raw_item_code).lower() == "null" or str(raw_item_code).strip() == "" or str(raw_item_code).upper() == "N/A") and is_product:
+        #      pass 
+
+        processed_location_for_csv = "" # Default to empty string for CSV output
+
+        if is_product:
+            is_valid_ai_country_code = False
+            current_ai_location_val = item.get("location") # This is location_from_ai
+
+            if current_ai_location_val is not None:
+                stripped_ai_loc = str(current_ai_location_val).strip()
+                # Check if AI provided a valid 2-letter code (case-insensitive)
+                if re.fullmatch(r"[A-Za-z]{2}", stripped_ai_loc):
+                    processed_location_for_csv = stripped_ai_loc.upper()
+                    is_valid_ai_country_code = True
+            
+            # If AI did not provide a valid 2-letter code, prompt the user.
+            # This covers:
+            # - current_ai_location_val is None
+            # - current_ai_location_val is an empty string "", " ", etc.
+            # - current_ai_location_val is "N/A" or "NOT_ON_IMAGE" (these specific strings)
+            # - current_ai_location_val is any other non-2-letter string (e.g., "China")
+            if not is_valid_ai_country_code:
+                item_identifier_for_prompt = csv_item_identifier
+                if not item_identifier_for_prompt or item_identifier_for_prompt == "N/A": # Fallback identifier
+                    item_identifier_for_prompt = gemini_item_name_desc if gemini_item_name_desc else f"Položka na strane {page_number}"
+
+                prompt_reason_message = ""
+                if current_ai_location_val is None:
+                    prompt_reason_message = "nebola automaticky extrahovaná"
+                elif str(current_ai_location_val).strip() == "":
+                    prompt_reason_message = "bola AI vrátená ako prázdna"
+                elif str(current_ai_location_val).strip().upper() == "N/A":
+                    prompt_reason_message = "bola AI označená ako 'N/A'"
+                elif str(current_ai_location_val).strip().upper() == "NOT_ON_IMAGE":
+                    prompt_reason_message = "bola AI označená ako 'NOT_ON_IMAGE' (čo môže znamenať, že nie je na aktuálnom obrázku strany)"
+                else:
+                    prompt_reason_message = f"bola AI vrátená v neplatnom formáte: '{current_ai_location_val}'"
+
+                print(f"VAROVANIE: Krajina pôvodu pre produkt '{item_identifier_for_prompt}' (strana {page_number}) {prompt_reason_message}.")
+                print(f"           (Tip: Ak je krajina uvedená na inej strane PDF alebo ju viete, zadajte ju teraz.)")
+                user_input_location = input(f"  Zadajte 2-písmenový kód krajiny (napr. CN, SK), alebo stlačte Enter, ak nie je známa/použiteľná: ").strip()
+                
+                if user_input_location: # If user provided some input
+                    if re.fullmatch(r"[A-Za-z]{2}", user_input_location): # Validate user input (case-insensitive)
+                        processed_location_for_csv = user_input_location.upper()
+                    else:
+                        print(f"  POZOR: Zadaný kód '{user_input_location}' nie je platný 2-písmenový kód krajiny. Krajina ostáva nevyplnená.")
+                        processed_location_for_csv = "" # Invalid user input, set to blank
+                else:
+                    processed_location_for_csv = "" # User pressed Enter, confirming it's unknown or to be left blank
+            # else: is_valid_ai_country_code was true, so processed_location_for_csv is already set from AI.
+
+        else: # Not a product (is_product is False)
+            current_ai_location_val = item.get("location")
+            if current_ai_location_val is not None:
+                stripped_ai_loc = str(current_ai_location_val).strip()
+                # For non-products, we can still try to capture & standardize a 2-letter code if AI provides one.
+                # Otherwise, it will remain blank. We don't prompt for non-products.
+                if re.fullmatch(r"[A-Za-z]{2}", stripped_ai_loc):
+                    processed_location_for_csv = stripped_ai_loc.upper()
+                # If AI gives "N/A", "NOT_ON_IMAGE", None, empty, or other for a non-product, 'processed_location_for_csv' remains ""
+        # --- End of product identification and location input logic ---
 
         # Calculate Preliminary Net Weight based on item_code_for_weight_lookup and quantity
         preliminary_net_weight = "" 
@@ -326,14 +420,21 @@ def process_gemini_response_to_csv_rows(gemini_json_data, page_number, product_w
                     numeric_quantity = float(quantity) if isinstance(quantity, (str, int, float)) else 0
                     preliminary_net_weight = numeric_quantity * unit_weight
                 except ValueError:
-                    # Log with more context: csv_item_identifier (the code) and gemini_item_name_desc (the name)
-                    print(f"Warning: Could not convert quantity '{quantity}' to number for item code '{csv_item_identifier}' (Name: '{gemini_item_name_desc}'). Preliminary weight calculation skipped.")
-                    preliminary_net_weight = "N/A" 
+                    if is_product: # Only warn for actual products
+                        print(f"VAROVANIE: Nepodarilo sa konvertovať množstvo '{quantity}' na číslo pre kód položky '{csv_item_identifier}' (Názov: '{gemini_item_name_desc}'). Výpočet predbežnej hmotnosti preskočený.")
+                    preliminary_net_weight = "CHYBA_QTY"
             else:
-                print(f"Warning: Weight not found for item_code '{item_code_for_weight_lookup}' (Name: '{gemini_item_name_desc}'). Preliminary weight calculation skipped.")
-                preliminary_net_weight = "NOT_FOUND" 
-        elif not product_weights_map:
-            preliminary_net_weight = "WEIGHT_DATA_MISSING"
+                if is_product: # Only warn for actual products
+                    print(f"VAROVANIE: Hmotnosť nebola nájdená pre kód položky '{item_code_for_weight_lookup}' (Názov: '{gemini_item_name_desc}'). Výpočet predbežnej hmotnosti preskočený.")
+                preliminary_net_weight = "NENÁJDENÉ" 
+        elif not product_weights_map and is_product and item_code_for_weight_lookup: # Only if is_product and was expecting a code
+            if is_product: # This check is redundant due to the elif condition, but kept for clarity on intent
+                 print(f"VAROVANIE: Dáta o hmotnostiach produktov chýbajú. Predbežná hmotnosť pre '{csv_item_identifier}' nemôže byť vypočítaná.")
+            preliminary_net_weight = "CHÝBAJÚ_DÁTA_HMOTNOSTI"
+        elif not item_code_for_weight_lookup and is_product: # Product by name, but no code for weight lookup
+            if is_product: # Again, for clarity
+                print(f"VAROVANIE: Produkt '{csv_item_identifier}' nemá priradený kód pre vyhľadanie hmotnosti. Predbežná hmotnosť nebude vypočítaná.")
+            preliminary_net_weight = "CHÝBA_KÓD_PRE_HMOTNOSŤ"
 
 
         items_for_csv.append({
@@ -341,7 +442,7 @@ def process_gemini_response_to_csv_rows(gemini_json_data, page_number, product_w
             "Invoice Number": invoice_number,
             "Item Name": csv_item_identifier, # Changed: Now uses the item code
             "description": final_csv_description, # Changed: Now uses the combined descriptive text
-            "Location": location, 
+            "Location": processed_location_for_csv, # Use the processed location (potentially user-input or from AI)
             "Quantity": quantity,
             "Unit Price": unit_price,
             "Total Price": total_price,
@@ -361,7 +462,7 @@ def prepare_item_details_for_ai(item_row_dict):
     item_identifier = item_row_dict.get("Item Name")
     item_description = item_row_dict.get("description")
     # item_row has "Location" (capital L), assign_customs_code_with_ai prompt expects lowercase "location"
-    item_origin = item_row_dict.get("Location") 
+    item_origin = item_row_dict.get("Location", "") 
 
     if not item_identifier: # If the main identifier (Item Name) is missing, it's hard to proceed meaningfully.
         print(f"    Item has no 'Item Name' (identifier). Insufficient for customs code AI. Item: {item_row_dict}")
@@ -392,13 +493,13 @@ def assign_customs_code_with_ai(item_details, all_customs_codes_map, genai_model
         customs_code = "85311030"
         # Fetch description from map if available, otherwise use a default
         customs_code_description = all_customs_codes_map.get(customs_code, "Poplachové zariadenia na ochranu budov") 
-        print(f"INFO: Hardcoded customs code {customs_code} ('{customs_code_description}') assigned to item {item_code_for_override} due to override rule.")
-        return customs_code, "Hardcoded override for CZ-1263.1"
+        # print(f"INFO: Hardcoded customs code {customs_code} ('{customs_code_description}') assigned to item {item_code_for_override} due to override rule.") # Removed user request
+        return customs_code, "Hardkódované pravidlo pre CZ-1263.1" # Translated reason
     elif item_code_for_override == "JA-196J":
         customs_code = "85311030"
         customs_code_description = all_customs_codes_map.get(customs_code, "Poplachové zariadenia na ochranu budov")
-        print(f"INFO: Hardcoded customs code {customs_code} ('{customs_code_description}') assigned to item {item_code_for_override} due to override rule.")
-        return customs_code, "Hardcoded override for JA-196J"
+        # print(f"INFO: Hardcoded customs code {customs_code} ('{customs_code_description}') assigned to item {item_code_for_override} due to override rule.") # Removed user request
+        return customs_code, "Hardkódované pravidlo pre JA-196J" # Translated reason
     # --- End of new hardcoded override logic ---
 
     # Existing AI assignment logic starts here
@@ -427,7 +528,8 @@ def assign_customs_code_with_ai(item_details, all_customs_codes_map, genai_model
         "Tvojou úlohou je vybrať JEDEN najvhodnejší 8-miestny kód colného sadzobníka (col_sadz) pre túto položku. "
         "Ber na vedomie, že veľa produktov spoločnosti (rôzne typy detektorov, senzorov, čidiel, sirén, ústrední alarmov, klávesníc) typicky patrí pod kód \'85311030\' (Poplachové zabezpečovacie systémy na ochranu budov). "
         "Ak popis položky silno naznačuje, že ide o takýto komponent alarmového systému, uprednostni kód \'85311030\'. "
-        "Pre ostatné položky (napr. káble, batérie, transformátory, montážny materiál) vyber najpresnejší kód podľa ich povahy. "
+        "Položky, ktoré sú príslušenstvom, doplnkom alebo sú priamo spojené s funkciou/identifikáciou alarmových systémov (napr. montážny materiál špecifický pre alarmy, informačné nálepky ALARM, batérie pre komponenty alarmu), by mali byť tiež klasifikované pod kód \'85311030\', pokiaľ pre ne neexistuje iný, jednoznačne vhodnejší a špecifickejší colný kód z poskytnutého zoznamu (napr. špecifický kód pre batérie ako \'8506xxxx\' alebo pre tlačené materiály ako \'4911xxxx\'). Ak však takýto špecifickejší kód nie je dostupný alebo vhodný, a položka jasne slúži systému pod kódom \'85311030\', použi \'85311030\' namiesto \'NEURCENE\'. "
+        "Pre ostatné položky (napr. všeobecné káble, ktoré nie sú špecificky pre alarmy, bežný spojovací materiál) vyber najpresnejší kód podľa ich povahy. "
         "Zameraj sa na presnú zhodu s popisom položky a charakteristikami tovaru. "
         "Dôkladne zváž každý kód a jeho popis vo vzťahu k položke. Vysvetli stručne svoj postup v pár bodoch a na konci uveď iba samotný 8-miestny kód na novom riadku za textom 'VYSLEDNY_KOD: '.\\n"
         "Napríklad:\\n"
@@ -439,12 +541,10 @@ def assign_customs_code_with_ai(item_details, all_customs_codes_map, genai_model
         "Ak nie je možné nájsť žiadny jednoznačne vhodný kód na základe poskytnutých informácií, alebo ak popis položky nie je dostatočný na jednoznačné určenie, vysvetli prečo a uveď VYSLEDNY_KOD: NEURCENE."
     )
 
-    # print(f"    DEBUG: Prompt pre AI na priradenie colneho kodu:\\n{prompt}")
-
     try:
         response = genai_model_instance.generate_content(prompt)
         raw_response_text = response.text.strip()
-        print(f"    DEBUG: Raw AI response for customs code assignment:\n{raw_response_text}") # Log raw response
+        # print(f"    DEBUG: Raw AI response for customs code assignment:\\n{raw_response_text}") # Log raw response # Already removed, kept for context
 
         # Try to extract the code after "VYSLEDNY_KOD: "
         # Regex made more flexible for whitespace and potential newlines around the code itself.
@@ -454,32 +554,32 @@ def assign_customs_code_with_ai(item_details, all_customs_codes_map, genai_model
 
         if code_match:
             extracted_value = code_match.group(1).strip()
-            print(f"    DEBUG: Regex matched. Extracted value: '{extracted_value}'")
+            # print(f"    DEBUG: Regex matched. Extracted value: \'{extracted_value}\'") # Already removed
             if re.fullmatch(r"[0-9]{8}", extracted_value):
                 if extracted_value in all_customs_codes_map:
                     assigned_code = extracted_value
-                    print(f"    INFO: AI assigned valid code: {assigned_code}")
+                    # print(f"    INFO: AI assigned valid code: {assigned_code}") # Removed
                 else:
-                    print(f"    WARNING: AI returned code '{extracted_value}' which is a valid 8-digit format BUT NOT in the known customs list. Treating as NEURCENE.")
-                    print(f"    Full AI reasoning: {raw_response_text}")
+                    print(f"    VAROVANIE: AI vrátil kód '{extracted_value}', ktorý má platný 8-miestny formát, ALE NIE JE v zozname známych colných kódov. Považuje sa za NEURCENE.") # Kept and already translated
+                    # print(f"    Full AI reasoning: {raw_response_text}") # Removed
                     # assigned_code remains NEURCENE (default)
             elif extracted_value.upper() == "NEURCENE":
                 assigned_code = "NEURCENE"
-                print(f"    INFO: AI explicitly assigned NEURCENE.")
+                # print(f"    INFO: AI explicitly assigned NEURCENE.") # Removed
             else:
-                print(f"    WARNING: Regex extracted '{extracted_value}' which is neither 8-digit code nor NEURCENE. Treating as NEURCENE.")
-                print(f"    Full AI reasoning: {raw_response_text}")
+                print(f"    VAROVANIE: Regex extrahoval '{extracted_value}', čo nie je ani 8-miestny kód ani NEURCENE. Považuje sa za NEURCENE.") # Kept and already translated
+                # print(f"    Full AI reasoning: {raw_response_text}") # Removed
                 # assigned_code remains NEURCENE (default)
         else:
-            print(f"    WARNING: Regex did not find 'VYSLEDNY_KOD: XXXXXXXX' or 'VYSLEDNY_KOD: NEURCENE' in the AI response. Treating as NEURCENE.")
-            print(f"    Full AI reasoning: {raw_response_text}")
+            print(f"    VAROVANIE: Regex nenašiel 'VYSLEDNY_KOD: XXXXXXXX' alebo 'VYSLEDNY_KOD: NEURCENE' v AI odpovedi. Považuje sa za NEURCENE.") # Kept and already translated
+            # print(f"    Full AI reasoning: {raw_response_text}") # Removed
             # assigned_code remains NEURCENE (default)
         
         return assigned_code, raw_response_text
 
     except Exception as e:
-        print(f"    Error during AI customs code assignment: {e}")
-        return "NEURCENE", f"Error: {e}"
+        print(f"    CHYBA počas AI priradenia colného kódu: {e}") # Translated
+        return "NEURCENE", f"Chyba: {e}" # Translated error reason
 
 def adjust_item_weights_to_target_totals_with_ai(items_data_list, target_total_net_kg, target_total_gross_kg, calculated_preliminary_total_net_kg, genai_model_instance):
     """
@@ -506,25 +606,49 @@ def adjust_item_weights_to_target_totals_with_ai(items_data_list, target_total_n
     # Filter out items that don't have a valid preliminary net weight for the AI prompt
     # These might be header/footer rows misinterpreted as items, or items with actual weight data issues.
     valid_items_for_prompt = []
+    non_product_keywords_for_weight_adjustment = ["sleva", "zľava", "doprava", "preprava", "poplatek", "manipulační", "discount", "shipping", "fee", "handling", "zľava", "poplatok"]
+    # Also check for item codes that might have been set to non-product identifiers like "Zľava"
+
     for item in items_data_list:
+        item_name_for_check = str(item.get("Item Name", "")).lower()
+        item_description_for_check = str(item.get("description", "")).lower()
         prelim_weight_str = item.get("Preliminary Net Weight", "")
-        if prelim_weight_str and prelim_weight_str not in ["QTY_ERR", "NO_WEIGHT_DATA"]:
+
+        # Determine if the item is likely a non-product type for weight adjustment purposes
+        is_non_product_for_weights = False
+        for keyword in non_product_keywords_for_weight_adjustment:
+            if keyword in item_name_for_check or keyword in item_description_for_check:
+                is_non_product_for_weights = True
+                break
+        # Also consider if the item_name itself is one of the special codes used in reporting for non-products
+        if item_name_for_check in ["zľava", "poplatok"]: # These are codes set in generate_single_report, but good to check
+            is_non_product_for_weights = True
+
+        if prelim_weight_str and prelim_weight_str not in ["CHYBA_QTY", "NENÁJDENÉ", "CHÝBAJÚ_DÁTA_HMOTNOSTI", "CHÝBA_KÓD_PRE_HMOTNOSŤ"]:
             try:
                 # Try converting to float to ensure it's a number before sending to AI
                 float(str(prelim_weight_str).replace(',', '.'))
                 valid_items_for_prompt.append({
-                    "item_code": item.get("Item Name", "N/A"),
+                    "item_code": item.get("Item Name", "N/A"), # This is the Item Code / Identifier
                     "description": item.get("description", "N/A"),
                     "quantity": item.get("Quantity", "N/A"),
                     "preliminary_net_weight_kg_str": prelim_weight_str # Keep as string for AI
                 })
             except ValueError:
-                print(f"Warning: Item '{item.get('Item Name')}' has invalid Preliminary Net Weight '{prelim_weight_str}' and will be excluded from AI adjustment.")
+                # Only warn if it's NOT a non-product type that we expect to have no valid weight
+                if not is_non_product_for_weights:
+                    print(f"VAROVANIE: Produktová položka '{item.get('Item Name')}' má neplatnú Predbežnú čistú hmotnosť '{prelim_weight_str}' a bude vylúčená z AI úpravy hmotností.")
         else:
-            print(f"Warning: Item '{item.get('Item Name')}' missing valid Preliminary Net Weight ('{prelim_weight_str}') and will be excluded from AI adjustment.")
+            # If prelim_weight_str is one of the error/missing strings, or empty
+            # Only print a warning if it's NOT a non-product type that we expect to have no valid weight.
+            if not is_non_product_for_weights and prelim_weight_str: # only if there was some error string, not if it was just empty from a non-product
+                 print(f"VAROVANIE: Produktová položka '{item.get('Item Name')}' nemá platnú Predbežnú čistú hmotnosť ('{prelim_weight_str}') a bude vylúčená z AI úpravy hmotností.")
+            elif not is_non_product_for_weights and not prelim_weight_str:
+                 # This case could be a product with genuinely missing weight info not caught by specific error strings
+                 print(f"INFO: Produktová položka '{item.get('Item Name')}' nemá žiadnu predbežnú hmotnosť a bude vylúčená z AI úpravy hmotností.")
 
     if not valid_items_for_prompt:
-        print("    ADJUST_AI: No valid items with preliminary weights to send to AI for adjustment.")
+        print("    ADJUST_AI: Neboli poskytnuté žiadne platné položky s predbežnými hmotnosťami pre AI úpravu.") # Translated
         # We need to return a structure that matches what the calling code expects for all original items.
         # So, we'll return the original items but flag that AI adjustment was skipped.
         result_list = []
@@ -568,12 +692,12 @@ def adjust_item_weights_to_target_totals_with_ai(items_data_list, target_total_n
         f"Dôkladne skontroluj súčty pred vrátením výsledku! Poskytni IBA JSON zoznam ako odpoveď, bez akéhokoľvek ďalšieho textu alebo vysvetlenia."
     )
 
-    print(f"    ADJUST_AI: Prompt pre AI na úpravu hmotností:\n{prompt}")
+    # print(f"    ADJUST_AI: Prompt pre AI na úpravu hmotností:\\n{prompt}") # Removed
 
     try:
         response = genai_model_instance.generate_content(prompt)
         raw_response_text = response.text.strip()
-        print(f"    ADJUST_AI: Raw AI response for weight adjustment:\n{raw_response_text}")
+        # print(f"    ADJUST_AI: Raw AI response for weight adjustment:\\n{raw_response_text}") # Removed
 
         # Clean the response if it's wrapped in ```json ... ```
         cleaned_json_text = raw_response_text
@@ -587,7 +711,7 @@ def adjust_item_weights_to_target_totals_with_ai(items_data_list, target_total_n
         try:
             adjusted_items_raw = json.loads(cleaned_json_text)
         except json.JSONDecodeError as je:
-            print(f"    ADJUST_AI: JSONDecodeError for weight adjustment: {je}. Raw text was: '{cleaned_json_text}'")
+            print(f"    ADJUST_AI: CHYBA DEKÓDOVANIA JSON pri úprave hmotností: {je}. Surový text bol: '{cleaned_json_text}'") # Translated
             # Fallback: return original items with error flags
             result_list = []
             for item_orig in items_data_list:
@@ -600,7 +724,7 @@ def adjust_item_weights_to_target_totals_with_ai(items_data_list, target_total_n
 
         # Validate AI response structure and content
         if not isinstance(adjusted_items_raw, list):
-            print("    ADJUST_AI: AI response is not a list.")
+            print("    ADJUST_AI: Odpoveď AI nie je zoznam.") # Translated
             # Fallback
             result_list = []
             for item_orig in items_data_list:
@@ -647,13 +771,13 @@ def adjust_item_weights_to_target_totals_with_ai(items_data_list, target_total_n
                         gross_val = float(str(final_gross_str))
 
                         if gross_val < net_val:
-                            print(f"    ADJUST_AI_VALIDATION: For item '{item_code_original}', AI returned Gross Weight ({gross_val}) < Net Weight ({net_val}). Flagging.")
+                            print(f"    ADJUST_AI_VALIDATION: Pre položku '{item_code_original}', AI vrátilo Hrubú hmotnosť ({gross_val}) < Čistá hmotnosť ({net_val}). Označuje sa.") # Translated
                             current_item_details_for_correction["error_type"] = "ERR_GROSS_LT_NET"
                             # Still use the values for now, correction might fix or propagate error string
                             current_item_details_for_correction["ai_final_net_kg"] = net_val
                             current_item_details_for_correction["ai_final_gross_kg"] = gross_val
                         elif net_val < 0:
-                            print(f"    ADJUST_AI_VALIDATION: For item '{item_code_original}', AI returned negative Net Weight ({net_val}). Flagging.")
+                            print(f"    ADJUST_AI_VALIDATION: Pre položku '{item_code_original}', AI vrátilo zápornú Čistú hmotnosť ({net_val}). Označuje sa.") # Translated
                             current_item_details_for_correction["error_type"] = "ERR_NEGATIVE"
                             current_item_details_for_correction["ai_final_net_kg"] = net_val
                             current_item_details_for_correction["ai_final_gross_kg"] = gross_val 
@@ -665,14 +789,14 @@ def adjust_item_weights_to_target_totals_with_ai(items_data_list, target_total_n
                             sum_final_gross_kg_check += gross_val # Sum for initial AI check
 
                     except ValueError as ve:
-                        print(f"    ADJUST_AI: ValueError converting AI weights for item '{item_code_original}': {ve}. Values: Net='{final_net_str}', Gross='{final_gross_str}'. Flagging.")
+                        print(f"    ADJUST_AI: CHYBA HODNOTY pri konverzii AI hmotností pre položku '{item_code_original}': {ve}. Hodnoty: Čistá='{final_net_str}', Hrubá='{final_gross_str}'. Označuje sa.") # Translated
                         current_item_details_for_correction["error_type"] = "ERR_CONVERT"
                 else:
-                    print(f"    ADJUST_AI: Missing 'Final Net Weight' or 'Final Gross Weight' key from AI for item '{item_code_original}'.")
+                    print(f"    ADJUST_AI: Chýbajúci kľúč 'Final Net Weight' alebo 'Final Gross Weight' od AI pre položku '{item_code_original}'.") # Translated
                     current_item_details_for_correction["error_type"] = "ERR_AI_KEY_MISSING"
             else:
                 # This item was not in AI's response (e.g., it was filtered out)
-                print(f"    ADJUST_AI: Item '{item_code_original}' not found in AI's adjusted list.")
+                print(f"    ADJUST_AI: Položka '{item_code_original}' nebola nájdená v upravenom zozname AI.") # Translated
                 current_item_details_for_correction["error_type"] = "NOT_IN_AI_RESP"
             
             items_for_programmatic_correction.append(current_item_details_for_correction)
@@ -680,9 +804,9 @@ def adjust_item_weights_to_target_totals_with_ai(items_data_list, target_total_n
         # Initial check of AI sums (before programmatic correction)
         tolerance = 0.001 * len(valid_items_for_prompt) 
         if not (abs(sum_final_net_kg_check - target_total_net_kg) < tolerance):
-            print(f"    ADJUST_AI_VALIDATION (Pre-correction): Sum of AI Net Weights ({sum_final_net_kg_check:.3f} kg) DOES NOT MATCH target ({target_total_net_kg:.3f} kg). Diff: {(sum_final_net_kg_check - target_total_net_kg):.3f} kg")
+            print(f"    ADJUST_AI_VALIDÁCIA (Pred-korekciou): Súčet AI čistých hmotností ({sum_final_net_kg_check:.3f} kg) SA NEROVNÁ cieľu ({target_total_net_kg:.3f} kg). Rozdiel: {(sum_final_net_kg_check - target_total_net_kg):.3f} kg") # Corrected and Translated
         if not (abs(sum_final_gross_kg_check - target_total_gross_kg) < tolerance):
-            print(f"    ADJUST_AI_VALIDATION (Pre-correction): Sum of AI Gross Weights ({sum_final_gross_kg_check:.3f} kg) DOES NOT MATCH target ({target_total_gross_kg:.3f} kg). Diff: {(sum_final_gross_kg_check - target_total_gross_kg):.3f} kg")
+            print(f"    ADJUST_AI_VALIDÁCIA (Pred-korekciou): Súčet AI hrubých hmotností ({sum_final_gross_kg_check:.3f} kg) SA NEROVNÁ cieľu ({target_total_gross_kg:.3f} kg). Rozdiel: {(sum_final_gross_kg_check - target_total_gross_kg):.3f} kg") # Corrected and Translated
 
         # --- Programmatic Sum Correction --- 
         # 1. Correct Net Weights
@@ -696,7 +820,7 @@ def adjust_item_weights_to_target_totals_with_ai(items_data_list, target_total_n
         total_proportional_net_base = sum(item['ai_final_net_kg'] for item in items_for_programmatic_correction if not item['is_error'] and item['ai_final_net_kg'] > 0 and item["error_type"] != "NOT_IN_AI_RESP")
 
         if abs(net_difference) > 1e-9: # If there is a notable difference
-            print(f"    PROGRAMMATIC_CORRECTION: Net difference to distribute: {net_difference:.6f} kg")
+            # print(f"    PROGRAMMATIC_CORRECTION: Net difference to distribute: {net_difference:.6f} kg") # Removed
             if total_proportional_net_base > 1e-9:
                 for item in items_for_programmatic_correction:
                     if not item['is_error'] and item['ai_final_net_kg'] > 0 and item["error_type"] != "NOT_IN_AI_RESP":
@@ -728,7 +852,7 @@ def adjust_item_weights_to_target_totals_with_ai(items_data_list, target_total_n
         total_proportional_packaging_base = sum(max(epsilon_packaging, item['ai_final_gross_kg'] - item['ai_final_net_kg']) for item in items_for_programmatic_correction if not item['is_error'] and item["error_type"] != "NOT_IN_AI_RESP")
         
         if abs(packaging_difference) > 1e-9:
-            print(f"    PROGRAMMATIC_CORRECTION: Packaging difference to distribute: {packaging_difference:.6f} kg")
+            # print(f"    PROGRAMMATIC_CORRECTION: Packaging difference to distribute: {packaging_difference:.6f} kg") # Removed
             if total_proportional_packaging_base > 1e-9:
                 for item in items_for_programmatic_correction:
                     if not item['is_error'] and item["error_type"] != "NOT_IN_AI_RESP":
@@ -742,7 +866,7 @@ def adjust_item_weights_to_target_totals_with_ai(items_data_list, target_total_n
                     else: # Error items or items not in AI response
                         item['corrected_final_gross_kg'] = item['ai_final_gross_kg'] # Keep AI's or error state
             else:
-                print("    PROGRAMMATIC_CORRECTION: Warning - Cannot distribute packaging difference proportionally, no positive packaging weights from AI or no valid items.")
+                print("    PROGRAMOVÁ KOREKCIA: VAROVANIE - Nie je možné proporcionálne rozdeliť rozdiel v balení, žiadne kladné hmotnosti balenia od AI alebo žiadne platné položky.") # Translated
                 for item in items_for_programmatic_correction:
                     # Fallback: make gross = corrected net + some equal share if possible, or just corrected net
                     # This path means AI gave all items Gross == Net, and we need to add packaging_difference
@@ -787,15 +911,15 @@ def adjust_item_weights_to_target_totals_with_ai(items_data_list, target_total_n
                 # Ensure gross is not less than net after all corrections for valid items
                 if item_detail['corrected_final_gross_kg'] < item_detail['corrected_final_net_kg']:
                     item_detail['corrected_final_gross_kg'] = item_detail['corrected_final_net_kg']
-                    print(f"    POST_CORRECTION_ADJUST: Item '{item_detail['Item Name']}' had gross < net, setting gross = net.")
+                    # print(f"    POST_CORRECTION_ADJUST: Item '{item_detail['Item Name']}' had gross < net, setting gross = net.") # Removed
                 
                 # Ensure weights are not negative after corrections
                 if item_detail['corrected_final_net_kg'] < 0:
                     item_detail['corrected_final_net_kg'] = 0.0 # Force non-negative
-                    print(f"    POST_CORRECTION_ADJUST: Item '{item_detail['Item Name']}' had negative net weight, set to 0.")
+                    print(f"    POKOREKČNÁ ÚPRAVA: Položka '{item_detail['Item Name']}' mala zápornú čistú hmotnosť, nastavená na 0.") # Translated
                 if item_detail['corrected_final_gross_kg'] < 0:
                     item_detail['corrected_final_gross_kg'] = 0.0 # Force non-negative
-                    print(f"    POST_CORRECTION_ADJUST: Item '{item_detail['Item Name']}' had negative gross weight, set to 0.")
+                    print(f"    POKOREKČNÁ ÚPRAVA: Položka '{item_detail['Item Name']}' mala zápornú hrubú hmotnosť, nastavená na 0.") # Translated
 
 
                 final_net_val_to_str = f"{item_detail['corrected_final_net_kg']:.3f}".replace('.', ',')
@@ -813,19 +937,21 @@ def adjust_item_weights_to_target_totals_with_ai(items_data_list, target_total_n
         # Use a slightly more forgiving tolerance for the final check due to potential cascading float issues
         final_tolerance = 1e-5 # Very small tolerance for final check
         if not (abs(final_sum_net_check - target_total_net_kg) < final_tolerance):
-            print(f"    PROGRAMMATIC_CORRECTION_VALIDATION: FINAL Sum of Net Weights ({final_sum_net_check:.6f} kg) DOES NOT MATCH target ({target_total_net_kg:.3f} kg) within tolerance {final_tolerance}. Diff: {(final_sum_net_check - target_total_net_kg):.6f} kg")
+            print(f"    PROGRAMOVÁ KOREKCIA VALIDÁCIA: FINÁLNY Súčet čistých hmotností ({final_sum_net_check:.6f} kg) SA NEROVNÁ cieľu ({target_total_net_kg:.3f} kg) v rámci tolerancie {final_tolerance}. Rozdiel: {(final_sum_net_check - target_total_net_kg):.6f} kg") # Corrected and Translated
         else:
-            print(f"    PROGRAMMATIC_CORRECTION_VALIDATION: FINAL Sum of Net Weights ({final_sum_net_check:.6f} kg) matches target ({target_total_net_kg:.3f} kg) perfectly or within tolerance.")
+            # print(f"    PROGRAMMATIC_CORRECTION_VALIDATION: FINAL Sum of Net Weights ({final_sum_net_check:.6f} kg) matches target ({target_total_net_kg:.3f} kg) perfectly or within tolerance.") # Removed
+            pass
 
         if not (abs(final_sum_gross_check - target_total_gross_kg) < final_tolerance):
-            print(f"    PROGRAMMATIC_CORRECTION_VALIDATION: FINAL Sum of Gross Weights ({final_sum_gross_check:.6f} kg) DOES NOT MATCH target ({target_total_gross_kg:.3f} kg) within tolerance {final_tolerance}. Diff: {(final_sum_gross_check - target_total_gross_kg):.6f} kg")
+            print(f"    PROGRAMOVÁ KOREKCIA VALIDÁCIA: FINÁLNY Súčet hrubých hmotností ({final_sum_gross_check:.6f} kg) SA NEROVNÁ cieľu ({target_total_gross_kg:.3f} kg) v rámci tolerancie {final_tolerance}. Rozdiel: {(final_sum_gross_check - target_total_gross_kg):.6f} kg") # Corrected and Translated
         else:
-            print(f"    PROGRAMMATIC_CORRECTION_VALIDATION: FINAL Sum of Gross Weights ({final_sum_gross_check:.6f} kg) matches target ({target_total_gross_kg:.3f} kg) perfectly or within tolerance.")
+            # print(f"    PROGRAMMATIC_CORRECTION_VALIDATION: FINAL Sum of Gross Weights ({final_sum_gross_check:.6f} kg) matches target ({target_total_gross_kg:.3f} kg) perfectly or within tolerance.") # Removed
+            pass
 
         return output_list_for_all_items
 
     except Exception as e:
-        print(f"    ADJUST_AI: Error during AI weight adjustment call: {e}")
+        print(f"    ADJUST_AI: CHYBA počas volania AI na úpravu hmotností: {e}") # Translated
         # Fallback: return original items with error flags
         result_list = []
         for item_orig in items_data_list:
@@ -842,7 +968,7 @@ def run_pdf_processing_flow():
     Converts PDFs to images, analyzes with Gemini, assigns customs codes,
     adjusts weights, and writes data to CSV.
     """
-    print(f"Starting PDF processing flow...")
+    # print(f"Starting PDF processing flow...") # Removed
 
     # Ensure output directories exist
     os.makedirs(OUTPUT_CSV_DIR, exist_ok=True)
@@ -873,12 +999,12 @@ def run_pdf_processing_flow():
     if not pdf_files_to_process:
         print(f"No PDF files found in '{INPUT_PDF_DIR}'. Nothing to process.")
         return
-    print(f"Found {len(pdf_files_to_process)} PDF files to process in '{INPUT_PDF_DIR}'.")
+    # print(f"Found {len(pdf_files_to_process)} PDF files to process in '{INPUT_PDF_DIR}'.") # Removed
 
     # Iterate through all PDF files in the input directory
     for pdf_file in pdf_files_to_process:
         pdf_path = os.path.join(INPUT_PDF_DIR, pdf_file)
-        print(f"\\n--- Processing PDF: {pdf_path} ---")
+        print(f"\\n--- Spracovávam PDF: {pdf_path} ---") # Changed message to be more user-friendly
         all_items_for_invoice = [] # Holds all items from all pages of a single PDF
         invoice_id_for_filename = os.path.splitext(pdf_file)[0] # Use PDF name as default invoice ID
 
@@ -906,7 +1032,7 @@ Please return the data in JSON format with the following structure:
       "quantity": 10, // Number of units. Must be a number.
       "unit_price": 25.99, // Price per unit. Must be a number.
       "total_price": 259.90, // Total price for the item (quantity * unit_price). Must be a number.
-      "location": "EXTRACT THE COUNTRY OF ORIGIN. This is usually a 2-letter code (e.g., GB, CZ, CN, DE) found next to the item code, or written as 'Made in X' or 'Origin: Y'. If no country of origin is found for an item, use null.",
+      "location": "COUNTRY OF ORIGIN (e.g., CZ, GB, CN). This is a CRITICAL field. Search carefully for a 2-letter ISO code or phrases like 'Made in [Country]' for EACH item. If the origin is genuinely ABSENT from the image for a specific item, use the exact string \\\"NOT_ON_IMAGE\\\". Otherwise, if found, provide the code.",
       "currency": "EUR" // Currency code (e.g., EUR, USD, CZK). Extract if present, default to "EUR" if not specified.
     }
     // ... more items
@@ -919,15 +1045,13 @@ Specific instructions for extraction:
 - For "item_code", prioritize the distinct product identifier.
 - For "item_name", use the most descriptive name provided.
 - For "description", capture any supplementary text associated with the item.
-- The "location" field is CRITICAL: Accurately extract the Country of Origin. Look for two-letter codes (CZ, GB, CN) near the item code or phrases like "Made in [Country]". If not found, explicitly use null.
+- "location" (Country of Origin): This field is ESSENTIAL. For EVERY item, meticulously find its origin (usually a 2-letter code like CZ, GB, or phrases like 'Made in...'). ONLY if the origin is genuinely ABSENT for a specific item on the invoice image, use the exact string \\\"NOT_ON_IMAGE\\\". Do not overlook this for any item. If present, provide the code.
 - If an invoice spans multiple pages, process each page's items.
 - Return ONLY the JSON structure. Do not include any other text or explanations before or after the JSON.
 """
         # Iterate over each image (page) from the PDF
         for i, image_path in enumerate(image_paths_current_pdf):
-            print(f"Analyzing page {i + 1} of {pdf_file} ({image_path})...")
-            # Adapt prompt if necessary for multi-page, e.g., to link items to the correct invoice ID
-            # For now, assuming each page can have its own set of items or belongs to one main invoice ID from the PDF name.
+            # print(f"Analyzing page {i + 1} of {pdf_file} ({image_path})...") # Removed
             
             # If invoice_id_for_filename is already set from a previous page,
             # we might not need to ask Gemini for it again, or we could ask it to confirm.
@@ -947,14 +1071,14 @@ Specific instructions for extraction:
                 if page_invoice_number and (invoice_id_for_filename == os.path.splitext(pdf_file)[0] or invoice_id_for_filename == "N/A"):
                     # Prioritize invoice number found by Gemini if it's the first one or more specific
                     invoice_id_for_filename = page_invoice_number
-                    print(f"Invoice number set/updated to: '{invoice_id_for_filename}' from page {i+1}.")
+                    # print(f"Invoice number set/updated to: '{invoice_id_for_filename}' from page {i+1}.") # Removed
 
                 page_items = process_gemini_response_to_csv_rows(gemini_data_page, i + 1, product_weights)
                 all_items_for_invoice.extend(page_items)
-                print(f"Found {len(page_items)} items on page {i + 1} of {pdf_file}.")
+                # print(f"Found {len(page_items)} items on page {i + 1} of {pdf_file}.") # Removed
             else:
                 error_msg = gemini_data_page.get("error", "Unknown error") if isinstance(gemini_data_page, dict) else "Raw analysis failed"
-                print(f"Skipping page {i + 1} of {pdf_file} due to Gemini analysis error: {error_msg}")
+                print(f"Preskakujem stranu {i + 1} súboru {pdf_file} kvôli chybe pri analýze: {error_msg}") # Changed message
                 # Add a placeholder row for the failed page if necessary for tracking
                 all_items_for_invoice.append({
                     "Page Number": i + 1,
@@ -968,15 +1092,15 @@ Specific instructions for extraction:
         # Clean invoice_id_for_filename if it became too complex or still default
         if not invoice_id_for_filename or invoice_id_for_filename == os.path.splitext(pdf_file)[0]:
             invoice_id_for_filename = os.path.splitext(pdf_file)[0] # Fallback to filename
-            print(f"Using PDF filename as base for invoice ID: '{invoice_id_for_filename}'")
+            # print(f"Using PDF filename as base for invoice ID: '{invoice_id_for_filename}'") # Removed
         elif invoice_id_for_filename == "N/A":
-             invoice_id_for_filename = f"UnknownInvoice_{os.path.splitext(pdf_file)[0]}" # Make it unique
-             print(f"Invoice ID not found by AI, using derived ID: '{invoice_id_for_filename}'")
+             invoice_id_for_filename = f"NeznameCisloFaktury_{os.path.splitext(pdf_file)[0]}" # Make it unique and Slovak
+             print(f"Číslo faktúry nebolo nájdené AI, použije sa odvodené ID: '{invoice_id_for_filename}'") # Changed message
 
 
         # --- Step 3.1: AI Customs Code Assignment ---
         if all_items_for_invoice and all_customs_codes_map:
-            print(f"\\nAssigning customs codes for {len(all_items_for_invoice)} extracted items from invoice {invoice_id_for_filename}...")
+            # print(f"\\nAssigning customs codes for {len(all_items_for_invoice)} extracted items from invoice {invoice_id_for_filename}...") # Removed
             for item_row in all_items_for_invoice:
                 # Skip if item is a placeholder for a failed page or has no name
                 if "PAGE ANALYSIS FAILED" in item_row.get("Item Name", "") or not item_row.get("Item Name"):
@@ -987,7 +1111,7 @@ Specific instructions for extraction:
                     print(f"Skipping customs code assignment for item '{item_row.get('Item Name', 'Unknown Item')}' due to insufficient details.")
                     continue
                 
-                # print(f"DEBUG: Item details for AI (customs): {item_details_for_ai}")
+                # print(f"DEBUG: Item details for AI (customs): {item_details_for_ai}") # Removed
                 assigned_code, assigned_description = assign_customs_code_with_ai(
                     item_details_for_ai, 
                     all_customs_codes_map,
@@ -995,40 +1119,43 @@ Specific instructions for extraction:
                 )
                 if assigned_code and assigned_code != "ERROR_NO_CODE_ASSIGNED":
                     item_row["Colný kód"] = assigned_code
-                    item_row["Popis colného kódu"] = assigned_description # This comes from all_customs_codes_map now
-                    print(f"Assigned customs code {assigned_code} to item: {item_row.get('Item Name', 'Unknown Item')}")
+                    # Fetch description from the map using the final assigned_code
+                    item_row["Popis colného kódu"] = all_customs_codes_map.get(assigned_code, "Popis nenájdený") if assigned_code != "NEURCENE" else assigned_description # Use AI reasoning if NEURCENE
+                    # print(f"Assigned customs code {assigned_code} to item: {item_row.get(\'Item Name\', \'Unknown Item\')}") # Removed
                 else:
-                    print(f"Failed to assign customs code for item: {item_row.get('Item Name', 'Unknown Item')}")
-                    # Keep existing or empty if no update
+                    print(f"Nepodarilo sa priradiť colný kód pre položku: {item_row.get('Item Name', 'Neznáma položka')}") # Changed message
+                    item_row["Colný kód"] = "NEPRIRADENÉ" # Explicitly mark as not assigned if AI fails
+                    item_row["Popis colného kódu"] = "Chyba pri priradení AI"
+
         elif not all_customs_codes_map:
-            print("Customs tariff codes map is empty. Skipping AI customs code assignment.")
+            print("Mapa colných kódov je prázdna. Preskakuje sa AI priradenie colných kódov.") # Changed message
         
-        print(f"DEBUG: All items for invoice {invoice_id_for_filename} after customs assignment: {all_items_for_invoice}")
+        # print(f"DEBUG: All items for invoice {invoice_id_for_filename} after customs assignment: {all_items_for_invoice}") # Removed
 
 
         # --- Step 3.2: Ask for Target Gross and Net Weights for the current invoice ---
         # Only ask if there are items to process for this invoice
         if not all_items_for_invoice or all( "PAGE ANALYSIS FAILED" in item.get("Item Name","") for item in all_items_for_invoice ):
-            print(f"No valid items extracted for invoice {invoice_id_for_filename} from {pdf_file}. Skipping weight input and adjustment.")
+            print(f"Pre faktúru {invoice_id_for_filename} z {pdf_file} neboli extrahované žiadne platné položky. Preskakuje sa zadávanie hmotností a ich úprava.") # Translated
         else:
-            print(f"\\n--- Weight Input for Invoice: {invoice_id_for_filename} (from {pdf_file}) ---")
+            print(f"\n--- Zadanie hmotností pre faktúru: {invoice_id_for_filename} (zo súboru {pdf_file}) ---") # Translated
             target_total_gross_kg = None
             target_total_net_kg = None
             while target_total_gross_kg is None:
                 try:
-                    target_total_gross_kg_str = input(f"Enter TARGET TOTAL GROSS weight (kg) for invoice {invoice_id_for_filename} (e.g., 150.5): ")
+                    target_total_gross_kg_str = input(f"Zadajte CIEĽOVÚ CELKOVÚ HRUBÚ hmotnosť (kg) pre faktúru {invoice_id_for_filename} (napr. 150.5): ") # Translated
                     target_total_gross_kg = float(target_total_gross_kg_str)
                 except ValueError:
-                    print("Invalid input. Please enter a numeric value for gross weight.")
+                    print("Neplatný vstup. Prosím, zadajte číselnú hodnotu pre hrubú hmotnosť.") # Translated
             
             while target_total_net_kg is None:
                 try:
-                    target_total_net_kg_str = input(f"Enter TARGET TOTAL NET weight (kg) for invoice {invoice_id_for_filename} (e.g., 140.2): ")
+                    target_total_net_kg_str = input(f"Zadajte CIEĽOVÚ CELKOVÚ ČISTÚ hmotnosť (kg) pre faktúru {invoice_id_for_filename} (napr. 140.2): ") # Translated
                     target_total_net_kg = float(target_total_net_kg_str)
                 except ValueError:
-                    print("Invalid input. Please enter a numeric value for net weight.")
+                    print("Neplatný vstup. Prosím, zadajte číselnú hodnotu pre čistú hmotnosť.") # Translated
 
-            print(f"Target weights for {invoice_id_for_filename}: Gross={target_total_gross_kg} kg, Net={target_total_net_kg} kg")
+            print(f"Cieľové hmotnosti pre {invoice_id_for_filename}: Hrubá={target_total_gross_kg} kg, Čistá={target_total_net_kg} kg")
 
             # --- Step 3.3: AI Weight Adjustment ---
             # Calculate the sum of "Preliminary Net Weight" for the current invoice
@@ -1042,14 +1169,14 @@ Specific instructions for extraction:
                     calculated_preliminary_total_net_kg += prelim_weight
                 valid_items_for_weight_adjustment.append(item_row) # only include processable items
             
-            print(f"Calculated Preliminary Total Net Weight for {invoice_id_for_filename} (from {len(valid_items_for_weight_adjustment)} items): {calculated_preliminary_total_net_kg:.3f} kg")
+            # print(f"Calculated Preliminary Total Net Weight for {invoice_id_for_filename} (from {len(valid_items_for_weight_adjustment)} items): {calculated_preliminary_total_net_kg:.3f} kg") # Removed
 
 
             if (calculated_preliminary_total_net_kg > 0 or any(item.get("Quantity") for item in valid_items_for_weight_adjustment)) and valid_items_for_weight_adjustment:
-                print(f"Adjusting weights for {len(valid_items_for_weight_adjustment)} items in invoice {invoice_id_for_filename} using AI...")
+                print(f"Prebieha úprava hmotností pre {len(valid_items_for_weight_adjustment)} položiek faktúry {invoice_id_for_filename} pomocou AI...") # Changed
                 # Note: adjust_item_weights_to_target_totals_with_ai is expected to modify items_data_list in-place
                 # or return a new list. The current implementation in snippets seems to modify in-place
-                # and also return a structure. Let's adapt to ensure 'all_items_for_invoice' is correctly updated.
+                # and also return a structure. Let\'s adapt to ensure \'all_items_for_invoice\' is correctly updated.
                 
                 # Make a deep copy if the adjustment function doesn't handle it or if you want to compare
                 # For now, passing the sub-list of valid items
@@ -1074,26 +1201,26 @@ Specific instructions for extraction:
                     if len(adjustment_result) == len(valid_items_for_weight_adjustment):
                         for original_item, adjusted_item_data in zip(valid_items_for_weight_adjustment, adjustment_result):
                             original_item.update(adjusted_item_data) # Update the original item in the sublist
-                        print(f"Successfully applied AI weight adjustments for invoice {invoice_id_for_filename}.")
+                        # print(f"Successfully applied AI weight adjustments for invoice {invoice_id_for_filename}.") # Removed
                     else:
-                         print(f"AI weight adjustment returned a list of different length for {invoice_id_for_filename}. Manual check needed. Updates not fully applied.")
+                         print(f"AI úprava hmotnosti vrátila zoznam s inou dĺžkou pre faktúru '{invoice_id_for_filename}'. Vyžaduje sa manuálna kontrola. Aktualizácie neboli plne aplikované.")
                 elif isinstance(adjustment_result, dict) and "error" in adjustment_result:
-                    print(f"Error during AI weight adjustment for {invoice_id_for_filename}: {adjustment_result['error']}. Using data before adjustment.")
+                    print(f"Chyba počas AI úpravy hmotnosti pre faktúru '{invoice_id_for_filename}': {adjustment_result['error']}. Používajú sa dáta pred úpravou.")
                 elif isinstance(adjustment_result, dict) and "items" in adjustment_result and isinstance(adjustment_result["items"], list):
                     # Similar merging logic as above if it returns a dict with "items"
                     adjusted_items_list_from_dict = adjustment_result["items"]
                     if len(adjusted_items_list_from_dict) == len(valid_items_for_weight_adjustment):
                         for original_item, adjusted_item_data in zip(valid_items_for_weight_adjustment, adjusted_items_list_from_dict):
                             original_item.update(adjusted_item_data)
-                        print(f"Successfully applied AI weight adjustments for invoice {invoice_id_for_filename} (from dict).")
+                        # print(f"Successfully applied AI weight adjustments for invoice {invoice_id_for_filename} (from dict).") # Removed
                     else:
-                        print(f"AI weight adjustment (from dict) returned a list of different length for {invoice_id_for_filename}. Updates not fully applied.")
+                        print(f"AI úprava hmotnosti (z dict) vrátila zoznam s inou dĺžkou pre faktúru '{invoice_id_for_filename}'. Aktualizácie neboli plne aplikované.")
                 else:
-                    print(f"AI weight adjustment for {invoice_id_for_filename} returned an unexpected result or modified in-place. Review data. Result: {type(adjustment_result)}")
+                    print(f"AI úprava hmotnosti pre faktúru '{invoice_id_for_filename}' vrátila neočakávaný výsledok alebo modifikovala dáta priamo. Skontrolujte dáta. Typ výsledku: {type(adjustment_result)}")
                     # If it modified in-place, valid_items_for_weight_adjustment (and thus items in all_items_for_invoice) are already updated.
 
             else:
-                print(f"Skipping AI weight adjustment for {invoice_id_for_filename} as there are no valid items with preliminary weights or quantities.")
+                print(f"Preskakuje sa AI úprava hmotnosti pre faktúru '{invoice_id_for_filename}', pretože neexistujú žiadne platné položky s predbežnými hmotnosťami alebo množstvami.")
                 # Populate Total Net/Gross as N/A or based on preliminary if no adjustment
                 for item_row in all_items_for_invoice:
                     if "PAGE ANALYSIS FAILED" in item_row.get("Item Name", ""): continue
@@ -1122,35 +1249,42 @@ Specific instructions for extraction:
                     # Ensure all dictionaries have all header keys to prevent DictWriter errors
                     processed_rows_for_csv = []
                     for item_dict in all_items_for_invoice:
+                        # Ensure 'Popis colného kódu' is correctly handled for NEURCENE or errors from AI customs assignment.
+                        # The logic above in customs assignment part should set this. Here we just ensure it's present.
+                        if item_dict.get("Colný kód") == "NEURCENE" and not item_dict.get("Popis colného kódu"):
+                            item_dict["Popis colného kódu"] = "Kód nebol určený AI"
+                        elif item_dict.get("Colný kód") == "NEPRIRADENÉ" and not item_dict.get("Popis colného kódu"):
+                            item_dict["Popis colného kódu"] = "Chyba pri priradení AI"
+                        
                         row = {header: item_dict.get(header, "") for header in headers}
                         processed_rows_for_csv.append(row)
                     writer.writerows(processed_rows_for_csv)
-                print(f"Successfully wrote processed data for invoice '{invoice_id_for_filename}' to '{output_csv_filename}'")
+                print(f"Úspešne zapísané spracované dáta pre faktúru '{invoice_id_for_filename}' do '{output_csv_filename}'") # Changed
 
                 # Move the processed PDF to processed_invoices directory
                 source_pdf_path = os.path.join(INPUT_PDF_DIR, pdf_file) # pdf_file is just the filename
                 destination_pdf_path = os.path.join(PROCESSED_PDF_DIR, pdf_file)
                 try:
                     shutil.move(source_pdf_path, destination_pdf_path)
-                    print(f"Successfully moved processed PDF '{pdf_file}' to '{PROCESSED_PDF_DIR}'")
+                    print(f"Úspešne presunuté spracované PDF '{pdf_file}' do '{PROCESSED_PDF_DIR}'") # Translated
                 except Exception as e:
-                    print(f"Error moving PDF '{pdf_file}' to '{PROCESSED_PDF_DIR}': {e}. Source: {source_pdf_path}, Dest: {destination_pdf_path}")
+                    print(f"CHYBA pri presúvaní PDF '{pdf_file}' do '{PROCESSED_PDF_DIR}': {e}. Zdroj: {source_pdf_path}, Cieľ: {destination_pdf_path}") # Translated
 
             except IOError as e:
-                print(f"IOError writing CSV for invoice '{invoice_id_for_filename}' to '{output_csv_filename}': {e}")
+                print(f"CHYBA VSTUPU/VÝSTUPU pri zápise CSV pre faktúru '{invoice_id_for_filename}' do '{output_csv_filename}': {e}") # Translated
             except Exception as e:
-                print(f"Unexpected error writing CSV for invoice '{invoice_id_for_filename}' to '{output_csv_filename}': {e}")
+                print(f"NeoČAKÁVANÁ CHYBA pri zápise CSV pre faktúru '{invoice_id_for_filename}' do '{output_csv_filename}': {e}") # Translated
         else:
-            print(f"No items to write to CSV for invoice from PDF: {pdf_file}")
+            print(f"Žiadne položky na zápis do CSV pre faktúru z PDF: {pdf_file}") # Translated
 
         # Clean up images for the current PDF
         if image_paths_current_pdf:
-            print(f"Cleaning up {len(image_paths_current_pdf)} image(s) for {pdf_file}...")
+            # print(f"Cleaning up {len(image_paths_current_pdf)} image(s) for {pdf_file}...") # Removed
             for image_path_to_delete in image_paths_current_pdf:
                 try:
                     os.remove(image_path_to_delete)
                 except OSError as e:
-                    print(f"Warning: Could not delete image {image_path_to_delete}: {e}")
+                    print(f"VAROVANIE: Nepodarilo sa vymazať obrázok {image_path_to_delete}: {e}") # Translated
 
     # For now, we'll let it try to proceed, but AI features will fail.
     # return # Uncomment to exit if API key is critical for all operations
@@ -1160,90 +1294,34 @@ Specific instructions for extraction:
     # model = genai.GenerativeModel(MODEL_NAME) # Moved into functions that use it or checked before use
 
     # --- Main Menu ---
-    while True:
-        print("\\n--- Intrastat Helper Main Menu ---")
-        print("1. Spracovať nové PDF faktúry (Process new PDF invoices)")
-        print("2. Generovať súhrnný report z CSV súborov (Generate summary report from CSV files)")
-        print("3. Zobraziť colné kódy (View customs codes)")
-        print("4. Exit")
-        choice = input("Čo chcete urobiť? (What do you want to do? Enter 1-4): ").strip()
-
-        if choice == '1':
-            # Configure API key here before calling functions that might use the model
-            if GOOGLE_API_KEY:
-                genai.configure(api_key=GOOGLE_API_KEY)
-                print("Google API Key configured for AI processing.")
-            else:
-                print("Warning: GOOGLE_API_KEY not found. AI-dependent features in PDF processing may not work.")
-            
-            # Ask for processing mode
-            while True:
-                mode_choice = input("Chcete spracovať všetky faktúry alebo jednotlivo? (vsetky/jednotlivo): ").strip().lower()
-                if mode_choice in ["vsetky", "jednotlivo"]:
-                    run_pdf_processing_flow(processing_mode=mode_choice)
-                    break
-                else:
-                    print("Neplatná voľba. Zadajte 'vsetky' alebo 'jednotlivo'. (Invalid choice. Enter 'vsetky' or 'jednotlivo'.)")
-        
-        elif choice == '2':
-            # Call prompt_and_generate_report without specific paths to list all CSVs in data_output
-            prompt_and_generate_report(available_csvs_paths=None)
-        elif choice == '3':
-            # Call list_csv_files to display all available CSVs
-            list_csv_files(REPORT_INPUT_DIR)
-        elif choice == '4':
-            print("Program sa ukončuje.")
-            break
-        else:
-            print("Neplatná voľba, skúste znova.")
-
-def main():
-    while True:
-        print("\nVyberte akciu:")
-        print("1. Spracovať nové PDF faktúry")
-        print("2. Generovať report z existujúcich CSV súborov")
-        print("3. Ukončiť")
-        
-        user_choice = input("Zadajte vašu voľbu (1-3): ").strip()
-        
-        if user_choice == '1':
-            run_pdf_processing_flow()
-            # The prompt_and_generate_report for newly processed files is already inside run_pdf_processing_flow
-        elif user_choice == '2':
-            # Call prompt_and_generate_report without specific paths to list all CSVs in data_output
-            prompt_and_generate_report(available_csvs_paths=None)
-        elif user_choice == '3':
-            print("Program sa ukončuje.")
-            break
-        else:
-            print("Neplatná voľba, skúste znova.")
+    # Removed duplicated/commented out main menu logic.
+    # The active menu is now only in the if __name__ == "__main__": block.
 
 if __name__ == "__main__":
     # Ensure GOOGLE_API_KEY is set
     GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
     if not GOOGLE_API_KEY:
-        print("Error: The GOOGLE_API_KEY environment variable is not set.")
-        print("Please ensure you have a .env file in the project root with GOOGLE_API_KEY=YOUR_API_KEY")
-        print("Or set the environment variable in your system.")
-        # Exit if key is critical, otherwise AI features will fail
-        # exit(1) 
+        print("CHYBA: Premenná prostredia GOOGLE_API_KEY nie je nastavená.")
+        print("Uistite sa, že máte súbor .env v koreňovom adresári projektu s GOOGLE_API_KEY=VÁŠ_API_KĽÚČ")
+        print("Alebo nastavte premennú prostredia vo vašom systéme.")
+        # exit(1) # Consider enabling this if the API key is absolutely critical
 
     # Primary menu loop (this is the loop that should be active)
     while True:
-        print("\\n--- Intrastat Helper Main Menu ---")
-        print("1. Spracovať nové PDF faktúry (Process new PDF invoices)")
-        print("2. Generovať súhrnný report z CSV súborov (Generate summary report from CSV files)")
-        print("3. Zobraziť colné kódy (View customs codes)")
-        print("4. Exit")
-        choice = input("Čo chcete urobiť? (What do you want to do? Enter 1-4): ").strip()
+        print("\\n--- Intrastat Asistent Menu ---") # Changed Menu Title
+        print("1. Spracovať nové PDF faktúry")
+        print("2. Generovať súhrnný report z CSV")
+        print("3. Zobraziť colné kódy")
+        print("4. Ukončiť")
+        choice = input("Zadajte vašu voľbu (1-4): ").strip() # Changed prompt message
 
         if choice == '1':
             if GOOGLE_API_KEY:
                 genai.configure(api_key=GOOGLE_API_KEY)
-                print("Google API Key configured for AI processing.")
+                # print("Google API Key configured for AI processing.") # Removed confirmation message
             else:
-                print("Warning: GOOGLE_API_KEY not found. AI-dependent features in PDF processing may not work.")
-            run_pdf_processing_flow()
+                print("UPOZORNENIE: GOOGLE_API_KEY nebol nájdený. Funkcie závislé od AI nemusia fungovať správne.") # Changed warning message
+            run_pdf_processing_flow() # Removed processing_mode argument as it's not used
         
         elif choice == '2':
             prompt_and_generate_report(available_csvs_paths=None)
@@ -1264,5 +1342,5 @@ if __name__ == "__main__":
         else:
             print("Neplatná voľba, skúste znova.")
     
-    # main() # This call should be commented out or removed
+    # main() # This call should be commented out or removed # Already removed
     # ... (any other concluding comments) ...
