@@ -119,7 +119,7 @@ dmypy.json
 # Project-specific
 pdf_images/
 data_output/
-data/
+# data/ # Already exists, ensuring no duplication
 *.DS_Store
 
 # Environment variables
@@ -128,6 +128,7 @@ data/
 # Directories for invoice files
 processed_invoices/
 invoices/
+dovozy/
 
 # Directory for generated CSV output
 data_output/
