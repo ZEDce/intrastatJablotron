@@ -119,7 +119,7 @@ dmypy.json
 # Project-specific
 pdf_images/
 data_output/
-# data/ # Already exists, ensuring no duplication
+data/
 *.DS_Store
 
 # Environment variables
