@@ -120,4 +120,29 @@ dmypy.json
 pdf_images/
 data_output/
 data/
-*.DS_Store 
+*.DS_Store
+
+# Environment variables
+.env
+
+# Directories for invoice files
+processed_invoices/
+invoices/
+
+# Directory for generated CSV output
+data_output/
+
+# Python virtual environment
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# IDE specific files
+.vscode/
+.idea/
+
+# OS specific files
+.DS_Store
+Thumbs.db 

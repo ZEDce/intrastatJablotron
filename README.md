@@ -7,7 +7,7 @@
 - [Používateľská Príručka](#používateľská-príručka)
 - [Inštalačná Príručka](#inštalačná-príručka)
 - [Technický Opis pre Vývojárov](#technický-opis-pre-vývojárov)
-- [Náklady na Používanie API (Gemini 1.5 Flash)](#náklady-na-používanie-api-gemini-15-flash)
+- [Náklady na Používanie API (Gemini 2.0 Flash Lite)](#náklady-na-používanie-api-gemini-20-flash-lite)
 
 ## Používateľská Príručka
 
@@ -25,15 +25,32 @@ Predstavte si, že máte jednu alebo viac PDF faktúr a potrebujete z nich získ
     *   Jeden spoločný CSV súbor pre všetky faktúry.
     *   Samostatné CSV súbory pre každú faktúru.
 3.  **Spracovanie Každej Faktúry:**
+    *   **Používateľský Vstup pre Hmotnosti:** Pre každú spracovávanú faktúru sa skript najprv opýta na cieľovú celkovú čistú hmotnosť a cieľovú celkovú hrubú hmotnosť pre danú faktúru. Tieto hodnoty poskytnuté používateľom sa použijú na finálnu úpravu hmotností položiek.
     *   Každá strana PDF sa skonvertuje na obrázok (uložený do `pdf_images/nazov_faktury/`).
     *   Obrázky strán sa odošlú do Google Gemini API na extrakciu dát (číslo faktúry, kód položky, popis položky, lokalita, množstvo, jednotková cena, celková cena) vo formáte JSON.
-    *   Pre každú položku sa vypočíta **Celková Čistá Hmotnosť** (`množstvo * jednotková hmotnosť`).
+    *   Pre každú položku sa vypočíta **Predbežná Čistá Hmotnosť** (`množstvo * jednotková hmotnosť z product_weight.csv`).
     *   Pre každú položku sa **pomocou AI priradí colný kód** na základe jej popisu a zoznamu colných kódov z `col_sadz.csv`.
+    *   **Úprava Hmotností Pomocou AI a Programatická Korekcia:** Na základe používateľom zadaných cieľových celkových hmotností pre faktúru a predbežne vypočítaných čistých hmotností položiek sa uskutoční ďalšie volanie AI. Táto AI má za úlohu navrhnúť finálnu čistú a hrubú hmotnosť pre každú položku tak, aby ich súčty presne zodpovedali cieľovým hodnotám. Výstup AI sa následne programaticky skontroluje a doladí, aby sa zabezpečila presná zhoda súčtov.
 4.  **Výstup (v priečinku `data_output/`):**
-    *   CSV súbor(y) s extrahovanými a vypočítanými dátami.
-    *   Stĺpce: Číslo Faktúry, Číslo Strany, Číslo Riadku, Názov Položky (kód produktu), Popis položky, Lokalita, Množstvo, Jednotková Cena, Celková Cena, Celková Čistá Hmotnosť, Colný kód, Popis colného kódu.
+    *   CSV súbor(y) s extrahovanými a vypočítanými dátami z `main.py`.
+    *   Stĺpce: Číslo Faktúry, Číslo Strany, Číslo Riadku, Názov Položky (kód produktu), Popis položky (description), Lokalita, Množstvo, Jednotková Cena, Celková Cena, **Predbežná Čistá Hmotnosť**, **Celková Čistá Hmotnosť (upravená)**, **Celková Hrubá Hmotnosť (upravená)**, Colný kód, Popis colného kódu.
     *   Pri spoločnom CSV súbore sú dáta z rôznych faktúr oddelené.
     *   Prípadné chyby pri spracovaní sú zaznamenané v CSV.
+5.  **Generovanie Súhrnného Reportu (pomocou `report.py`):**
+    *   Po dokončení `main.py` môžete spustiť `python report.py`.
+    *   Skript `report.py` načíta jeden z CSV súborov vygenerovaný `main.py` (z priečinka `data_output/`), ktorý si používateľ vyberie.
+    *   Spracuje dáta:
+        *   Zoskupí položky podľa `Colnej sadzby` (predtým `Colný kód`) a `Krajiny Pôvodu`.
+        *   Vypočíta súčty pre hrubú hmotnosť, čistú hmotnosť, počet kusov a celkovú cenu.
+        *   Položky "Sleva zákazníkovi" (zľava) a "Manipulační poplatek" (manipulačný poplatok), identifikované podľa stĺpca `description` z CSV súboru z `main.py`:
+            *   Ich množstvo (`Quantity`) sa nepočíta do celkového súčtu kusov.
+            *   Cena ("Celková Cena") manipulačného poplatku sa nepočíta do celkového súčtu cien. Cena zľavy *je* zahrnutá.
+            *   Zľavy ("Sleva zákazníkovi") sa v reporte zobrazia pod colnou sadzbou "Zľava" a krajinou pôvodu "Zľava".
+        *   Odstráni riadky, kde je colná sadzba "NEURCENE" a všetky súčtové hodnoty (hmotnosti, kusy, cena) sú nulové (typicky to platí pre manipulačné poplatky po ich vynulovaní).
+        *   Pridá celkový súčtový riadok "Spolu".
+    *   **Výstup reportu (v priečinku `dovozy/`):**
+        *   Jeden CSV súbor (názov zadáva používateľ, predvolený je napr. `summary_report_processed_invoice_data_Fa_XXXX.csv`).
+        *   Stĺpce: `Colná sadzba`, `Krajina Pôvodu`, `Súčet Hrubá Hmotnosť`, `Súčet Čistá Hmotnosť`, `Súčet Počet Kusov`, `Súčet Celková Cena`. Stĺpec `Popis Colného Kódu` bol odstránený.
 
 Tieto CSV súbory môžete otvoriť pomocou Excelu alebo akéhokoľvek tabuľkového editora. Skript tiež vypíše do konzoly/terminálu správy o tom, čo práve robí.
 
@@ -80,7 +97,8 @@ Pred spustením skriptu sa uistite, že máte všetko správne nastavené:
         python main.py
         \`\`\`
     *   Skript vás najprv požiada, aby ste si vybrali, či chcete jeden spoločný CSV súbor alebo samostatné súbory pre každú faktúru. Zadajte `1` alebo `2` a stlačte Enter.
-    *   Následne začne spracovávať PDF súbory. Priebežne bude vypisovať informácie o tom, čo práve robí.
+    *   Následne, **pre každú PDF faktúru**, vás skript požiada zadať cieľovú celkovú čistú hmotnosť a cieľovú celkovú hrubú hmotnosť pre danú faktúru. Zadajte požadované hodnoty a potvrďte Enterom.
+    *   Potom začne spracovávať PDF súbory. Priebežne bude vypisovať informácie o tom, čo práve robí.
 
 **Čo potrebujete urobiť? (Stručný prehľad po inštalácii)**
 
@@ -90,12 +108,15 @@ Pred spustením skriptu sa uistite, že máte všetko správne nastavené:
 4.  Uistite sa, že súbor `col_sadz.csv` je TAKTIEŽ v priečinku `data/` a má správny formát.
 5.  Spustite skript príkazom `python main.py` vo vašom termináli/príkazovom riadku.
 6.  Keď sa skript opýta, zadajte `1` pre jeden spoločný CSV súbor, alebo `2` pre samostatné CSV súbory pre každú faktúru.
+7.  Pre každú faktúru zadajte požadovanú celkovú čistú a hrubú hmotnosť, keď vás skript vyzve.
+8.  Po dokončení `main.py` môžete spustiť `python report.py` pre generovanie súhrnného reportu. Vyberiete vstupný CSV súbor z `data_output/` a zadáte názov výstupného reportu, ktorý sa uloží do `dovozy/`.
 
 **Čo získate?**
 
-Výsledné CSV súbory nájdete v novovytvorenom priečinku `data_output/` (v hlavnom priečinku skriptu). Podľa vašej voľby pri spustení skriptu to bude:
-*   **Jeden spoločný CSV súbor:** Súbor s názvom `extracted_invoice_data.csv` v priečinku `data_output/`. Bude obsahovať údaje zo všetkých spracovaných PDF faktúr, prehľadne usporiadané a oddelené špeciálnym riadkom pre každú novú faktúru.
-*   **Samostatné CSV súbory:** Pre každú spracovanú PDF faktúru sa vytvorí samostatný CSV súbor v priečinku `data_output/` (napr. ak máte faktúru `moja_faktura.pdf`, vytvorí sa `moja_faktura_extracted.csv`).
+- Výsledné CSV súbory **po spracovaní `main.py`** nájdete v novovytvorenom priečinku `data_output/` (v hlavnom priečinku skriptu). Podľa vašej voľby pri spustení skriptu to bude:
+    *   **Jeden spoločný CSV súbor:** Súbor s názvom `extracted_invoice_data.csv` v priečinku `data_output/`. Bude obsahovať údaje zo všetkých spracovaných PDF faktúr, prehľadne usporiadané a oddelené špeciálnym riadkom pre každú novú faktúru.
+    *   **Samostatné CSV súbory:** Pre každú spracovanú PDF faktúru sa vytvorí samostatný CSV súbor v priečinku `data_output/` (napr. ak máte faktúru `moja_faktura.pdf`, vytvorí sa `processed_invoice_data_moja_faktura.csv`).
+- Výsledný **súhrnný report po spracovaní `report.py`** nájdete v priečinku `dovozy/`. Bude to jeden CSV súbor (napr. `summary_report_processed_invoice_data_Fa_XXXX.csv`) obsahujúci agregované dáta.
 
 Tieto CSV súbory môžete otvoriť pomocou Excelu alebo akéhokoľvek tabuľkového editora. Skript tiež vypíše do konzoly/terminálu správy o tom, čo práve robí.
 
@@ -112,17 +133,32 @@ Skript `main.py` v Pythone vykonáva nasledujúce hlavné kroky:
     *   Konvertuje strany na PNG obrázky (`pdf_to_images`) do `pdf_images/nazov_faktury/`.
 3.  **Extrakcia Dát cez AI (Google Gemini):**
     *   Obrázky strán posiela s podrobnou výzvou (prompt) do Gemini API (`analyze_image_with_gemini` s modelom `gemini-2.0-flash-lite`).
-    *   Očakáva JSON odpoveď s číslom faktúry a detailmi položiek (vrátane `description`).
+    *   Očakáva JSON odpoveď s číslom faktúry a detailmi položiek (vrátane `description`, ktoré sa neskôr použije v `report.py` na identifikáciu zliav a poplatkov).
+    *   **Dôležité pre extrakciu krajiny pôvodu:** Výzva pre Gemini bola špeciálne upravená tak, aby explicitne žiadala extrakciu poľa `"location"` ako dvojpísmenového kódu krajiny pôvodu (napr. GB, CZ, CN) alebo fráz typu "Made in X" / "Origin: Y", ktoré sa často nachádzajú pri kóde položky alebo v jej popise. Ak krajina nie je nájdená, Gemini má vrátiť `null`.
 4.  **Priraďovanie Colných Kódov cez AI (Google Gemini):**
-    *   Pre každú extrahovanú položku sa na základe jej textového popisu a zoznamu colných kódov (z `col_sadz.csv`) pomocou ďalšieho volania Gemini API (`assign_customs_code_with_ai` s modelom `gemini-2.0-flash-lite`) priradí najvhodnejší 8-miestny colný kód.
-5.  **Transformácia Dát a Výpočet Hmotnosti:**
+    *   Funkcia `assign_customs_code_with_ai` (s modelom `gemini-2.0-flash-lite`):
+        *   **Špecifické Priradenia:** Obsahuje logiku na priame priradenie colných kódov pre konkrétne "Item Name" (napr. "CZ-1263.1", "JA-196J"), čím sa obchádza AI pre tieto položky.
+        *   **AI Priradenie:** Pre ostatné položky sa na základe ich textového popisu a zoznamu colných kódov (z `col_sadz.csv`) pomocou Gemini API priradí najvhodnejší 8-miestny colný kód.
+5.  **Transformácia Dát a Výpočet Predbežnej Hmotnosti:**
     *   Spracuje JSON odpoveď (`process_gemini_response_to_csv_rows`).
-    *   Mapuje polia, vypočíta celkovú čistú hmotnosť (`množstvo * jednotková_hmotnosť`).
+    *   Mapuje polia, vypočíta predbežnú celkovú čistú hmotnosť (`množstvo * jednotková_hmotnosť`) a uloží ju ako "Preliminary Net Weight".
     *   Pridá priradený colný kód a jeho popis.
     *   Rieši chýbajúce dáta / chyby konverzie.
-6.  **Generovanie CSV Výstupu:**
+6.  **Úprava Hmotností Položiek cez AI a Programatická Korekcia:**
+    *   Používateľ zadá cieľovú celkovú čistú a hrubú hmotnosť pre aktuálnu faktúru.
+    *   Funkcia `adjust_item_weights_to_target_totals_with_ai` (s modelom `gemini-2.0-flash-lite`) je zavolaná. AI dostane zoznam položiek (s ich predbežnými čistými hmotnosťami) a cieľové sumy.
+    *   AI navrhne finálne čisté a hrubé hmotnosti pre každú položku s cieľom dodržať sumy a zabezpečiť logickú distribúciu (vrátane "nerovnomernej" distribúcie hmotnosti obalov).
+    *   Výstup AI sa následne programaticky skontroluje a upraví, aby sa zabezpečilo, že súčty finálnych čistých a hrubých hmotností presne zodpovedajú používateľom zadaným cieľom. Táto korekcia distribuuje prípadné malé rozdiely proporcionálne.
+7.  **Generovanie CSV Výstupu:**
     *   Na základe voľby používateľa zapíše dáta do `data_output/` (jeden spoločný alebo samostatné CSV).
-    *   Definované hlavičky zahŕňajú všetky extrahované, vypočítané a priradené polia (vrátane "Popis položky", "Colný kód", "Popis colného kódu").
+    *   Definované hlavičky zahŕňajú všetky extrahované, vypočítané a priradené polia (vrátane "Preliminary Net Weight", "Total Net Weight" (upravená), "Total Gross Weight" (upravená), "Popis položky", "Colný kód", "Popis colného kódu").
+8.  **Generovanie Súhrnného Reportu (`report.py`):**
+    *   Načíta CSV súbor vygenerovaný `main.py` (z `data_output/`).
+    *   Vykoná zoskupenie dát podľa `Colnej sadzby` (predtým `Colný kód`) a `Krajiny Pôvodu`.
+    *   Agreguje hmotnosti, počet kusov a ceny.
+    *   **Špeciálne spracovanie zliav a poplatkov:** Identifikuje položky ako "Sleva zákazníkovi" a "Manipulační poplatek" na základe stĺpca `description`. Pre tieto položky upravuje započítavanie množstva a ceny do súhrnov. Zľavy sú reportované pod špecifickou colnou sadzbou "Zľava".
+    *   Odfiltruje riadky s colnou sadzbou "NEURCENE", ak sú všetky ich súčtové hodnoty nulové.
+    *   Uloží finálny report do priečinka `dovozy/`. Stĺpec `Popis Colného Kódu` sa v tomto reporte nenachádza a `Colný kód` je premenovaný na `Colná sadzba`.
 
 **Kľúčové Knižnice:**
 *   `PyMuPDF (fitz)`: Konverzia PDF na obrázky.
@@ -131,31 +167,34 @@ Skript `main.py` v Pythone vykonáva nasledujúce hlavné kroky:
 *   Štandardné: `os`, `glob`, `csv`, `json`.
 
 **Dôležité Aspekty:**
-*   **Prompt Engineering:** Úspech extrakcie závisí od presnosti výzvy pre Gemini API (požaduje JSON).
+*   **Prompt Engineering:** Úspech extrakcie a úpravy hmotností závisí od presnosti výziev pre Gemini API.
 *   **Spracovanie Chýb:** Skript obsahuje mechanizmy na robustné spracovanie chýb.
+*   **Programatická Korekcia:** Na zabezpečenie presnosti súčtov hmotností sa po návrhu AI vykonáva finálna programatická korekcia.
 *   **Modulárnosť:** Kód je rozdelený do funkcií s jasnými zodpovednosťami.
 
-## Náklady na Používanie API (Gemini 1.5 Flash)
+## Náklady na Používanie API (Gemini 2.0 Flash Lite)
 
-Projekt využíva model `gemini-2.0-flash-lite`. Náklady spojené s Gemini API závisia od počtu tokenov na vstupe (obrázky + textová výzva) a na výstupe (vygenerované JSON dáta alebo textová odpoveď pre colný kód).
+Projekt využíva model `gemini-2.0-flash-lite`. Náklady spojené s Gemini API závisia od počtu tokenov na vstupe (obrázky + textová výzva) a na výstupe (vygenerované JSON dáta alebo textová odpoveď pre colný kód/úpravu hmotností).
 
-K augustu 2024 je cena za Gemini 1.5 Flash (platená úroveň, pre výzvy do 128k tokenov) približne:
-*   **Vstupné tokeny:** 0,075 $ za 1 milión tokenov (cena pre gemini-2.0-flash-lite môže byť iná, toto je pre 1.5 Flash)
-*   **Výstupné tokeny:** 0,30 $ za 1 milión tokenov (cena pre gemini-2.0-flash-lite môže byť iná, toto je pre 1.5 Flash)
+K augustu 2024 je cena za model `gemini-2.0-flash-lite` (alebo jeho ekvivalent, ceny sa môžu líšiť, overte si aktuálne cenníky Google AI):
+*   Ceny sú typicky udávané za 1 milión tokenov pre vstup a odlišne pre výstup.
 
 **Odhadované náklady pre tento extraktor:**
 
-Spracovanie jednej položky na faktúre teraz zahŕňa:
-1.  Jedno volanie API na extrakciu dát z obrázka stránky (zdieľané pre všetky položky na stránke).
+Spracovanie jednej faktúry teraz zahŕňa:
+1.  Jedno volanie API na extrakciu dát z obrázka každej stránky faktúry (zdieľané pre všetky položky na stránke).
 2.  Jedno volanie API na priradenie colného kódu pre každú jednotlivú položku.
+3.  Jedno volanie API pre celú faktúru na úpravu čistých a hrubých hmotností všetkých jej položiek naraz.
 
-To znamená, že náklady budú o niečo vyššie ako pri pôvodnom skripte, ktorý robil len extrakciu dát. Model `gemini-2.0-flash-lite` je však navrhnutý pre rýchlosť a efektivitu.
+To znamená, že náklady budú o niečo vyššie ako pri pôvodnom skripte. Model `gemini-2.0-flash-lite` je však navrhnutý pre rýchlosť a efektivitu.
 *   **Vstup na stránku (obrázok + výzva pre extrakciu):** ~1600 tokenov (hrubý odhad)
 *   **Výstup na stránku (JSON dáta):** ~200-500 tokenov (závisí od počtu položiek)
 *   **Vstup na pridelenie colného kódu (detaily položky + zoznam kódov + výzva):** ~300-700 tokenov (závisí od dĺžky popisov a počtu colných kódov v `col_sadz.csv`)
 *   **Výstup na pridelenie colného kódu (zdôvodnenie + kód):** ~50-150 tokenov
+*   **Vstup na úpravu hmotností (zoznam položiek faktúry + detaily + výzva):** ~500-1500+ tokenov (veľmi závisí od počtu položiek na faktúre a dĺžky ich popisov)
+*   **Výstup na úpravu hmotností (JSON so všetkými upravenými hmotnosťami položiek):** ~100-400+ tokenov (závisí od počtu položiek)
 
-Presné náklady sa budú líšiť. Náklady na pridelenie colného kódu sa pripočítavajú pre každú položku zvlášť.
+Presné náklady sa budú líšiť.
 
 **Poznámka:**
 *   Toto sú odhady. Skutočné náklady sa môžu líšiť.

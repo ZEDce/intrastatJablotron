@@ -12,6 +12,11 @@ import csv # Added for CSV output
 import re # For regular expression based text parsing
 import json # Added for JSON parsing
 import glob # Added to find all PDF files
+import shutil # Added for moving files
+
+# Import functions from report.py
+from report import list_csv_files, get_customs_code_descriptions, generate_single_report, INPUT_DIR as REPORT_INPUT_DIR, prompt_and_generate_report
+
 
 # Load environment variables from .env file
 load_dotenv()
@@ -29,6 +34,12 @@ load_dotenv()
 # but 1.5-flash is generally recommended for cost/performance balance.
 MODEL_NAME = "gemini-2.0-flash-lite"
 CUSTOMS_ASSIGNMENT_MODEL_NAME = "gemini-2.0-flash-lite"
+# PACKAGING_WEIGHT_PER_UNIT_KG = 0.050 # Removed: User will provide target gross weight
+
+INPUT_PDF_DIR = "invoices/" # Define input directory for PDFs
+OUTPUT_CSV_DIR = "data_output/" # Define output directory for CSVs
+PDF_IMAGE_DIR = "pdf_images/" # Define directory for images extracted from PDFs
+PROCESSED_PDF_DIR = "processed_invoices/" # Define directory for processed PDFs
 
 def load_product_weights(file_path="data/product_weight.csv"):
     """
@@ -38,7 +49,7 @@ def load_product_weights(file_path="data/product_weight.csv"):
     """
     weights = {}
     try:
-        with open(file_path, mode='r', encoding='utf-8') as csvfile:
+        with open(file_path, mode='r', encoding='utf-8-sig') as csvfile: # Changed to utf-8-sig
             reader = csv.reader(csvfile, delimiter=';')
             header = next(reader) # Skip header row
             if header != ["Registrační číslo", "JV Váha komplet SK"]:
@@ -237,80 +248,132 @@ def process_gemini_response_to_csv_rows(gemini_json_data, page_number, product_w
             "Quantity": "",
             "Unit Price": "",
             "Total Price": "",
-            "Total Net Weight": "",
+            "Preliminary Net Weight": "", # Changed from Total Net Weight
+            "Total Net Weight": "",      # Will be AI adjusted
+            "Total Gross Weight": "",    # Will be AI adjusted
             "Colný kód": "",
             "Popis colného kódu": ""
         })
         return items_for_csv
 
     invoice_number = gemini_json_data.get("invoice_number", "N/A")
-    extracted_items = gemini_json_data.get("items", [])
-
-    if not isinstance(extracted_items, list):
-        print(f"Page {page_number}: 'items' field is not a list or is missing. Found: {type(extracted_items)}")
-        items_for_csv.append({
-            "Page Number": page_number,
-            "Invoice Number": invoice_number if invoice_number else "N/A",
-            "Item Name": "Error: 'items' field from AI was not a list.",
-            "description": "",
-            "Location": "", "Quantity": "", "Unit Price": "", "Total Price": "", "Total Net Weight": "",
-            "Colný kód": "",
-            "Popis colného kódu": ""
-        })
-        return items_for_csv
-
-    if not extracted_items:
-        print(f"Page {page_number}: No items found in Gemini JSON response. Invoice: {invoice_number}")
-        items_for_csv.append({
-            "Page Number": page_number,
-            "Invoice Number": invoice_number if invoice_number else "NOT FOUND",
-            "Item Name": "No items found on this page.",
-            "description": "",
-            "Location": "", "Quantity": "", "Unit Price": "", "Total Price": "", "Total Net Weight": "",
-            "Colný kód": "",
-            "Popis colného kódu": ""
-        })
-        return items_for_csv
-
-    for item in extracted_items:
-        if not isinstance(item, dict):
-            print(f"Page {page_number}: Skipping an item that is not a dictionary: {item}")
-            continue
-        
-        item_code = item.get("item_code") or ""
-        quantity_str = item.get("quantity") or ""
-        
-        total_net_weight_val = "" # Default to empty string
-        if item_code and quantity_str:
-            unit_weight = product_weights_map.get(item_code)
-            if unit_weight is not None: # Check if item_code was found in weights map
-                try:
-                    # Gemini might return quantity as "2.00" or "2", ensure it's float compatible
-                    quantity_float = float(str(quantity_str).replace(',', '.')) 
-                    calculated_weight = quantity_float * unit_weight
-                    total_net_weight_val = f"{calculated_weight:.3f}".replace('.', ',') # Format to 3 dec places, use comma
-                except ValueError:
-                    print(f"Warning: Could not convert quantity '{quantity_str}' to float for item '{item_code}'. Net weight calculation skipped.")
-                    total_net_weight_val = "QTY_ERR"
-            else:
-                print(f"Warning: Unit weight not found for item_code '{item_code}'. Net weight will be empty.")
-                total_net_weight_val = "NO_WEIGHT_DATA"
-        
+    items = gemini_json_data.get("items", [])
+    
+    if not items: # If items list is empty or not present
+        print(f"Page {page_number}: No items found in Gemini response for invoice {invoice_number}.")
         items_for_csv.append({
             "Page Number": page_number,
             "Invoice Number": invoice_number,
-            "Item Name": item_code,
-            "description": item.get("description") or "",
-            "Location": item.get("location") or "",
-            "Quantity": quantity_str,
-            "Unit Price": item.get("unit_price") or "",
-            "Total Price": item.get("total_price") or "",
-            "Total Net Weight": total_net_weight_val,
+            "Item Name": "NO ITEMS FOUND IN RESPONSE",
+            "description": "",
+            "Location": "",
+            "Quantity": "",
+            "Unit Price": "",
+            "Total Price": "",
+            "Preliminary Net Weight": "",
+            "Total Net Weight": "",
+            "Total Gross Weight": "",
             "Colný kód": "",
             "Popis colného kódu": ""
         })
-    
+        return items_for_csv
+
+    for item in items:
+        # item_name = item.get("item_name", "N/A") # Original: Use item_name as per user's prompt
+        # description = item.get("description", "") # Original: Added description field
+
+        # New logic:
+        # This will go into CSV "Item Name" (this is the product code like JA-XXXX)
+        raw_item_code = item.get("item_code")
+        gemini_item_name_for_id = item.get("item_name", "N/A") # Get Gemini's item_name, default to N/A
+
+        if raw_item_code is None or str(raw_item_code).lower() == "null": # Check for None or string "null"
+            # If item_code is null/None, use Gemini's item_name as the identifier (e.g., "SLEVA", "DOPRAVA")
+            csv_item_identifier = gemini_item_name_for_id
+        else:
+            # Otherwise, use the provided item_code
+            csv_item_identifier = str(raw_item_code) # Ensure it's a string
+
+        # This is the descriptive name from Gemini (e.g., "Ústředna s rádiovým modulem")
+        gemini_item_name_desc = item.get("item_name", "")  
+        # Additional details from Gemini (e.g., "(recyklační příspěvek...)" or "Sleva zákazníkovi...")
+        gemini_item_details = item.get("description", "") 
+
+        # Construct the final description for the CSV by combining Gemini's item_name and description
+        final_csv_description = gemini_item_name_desc
+        if gemini_item_name_desc and gemini_item_details: # If both exist, combine with " - "
+             final_csv_description = f"{gemini_item_name_desc} - {gemini_item_details}"
+        elif gemini_item_details: # Only details exist
+            final_csv_description = gemini_item_details
+        # If only gemini_item_name_desc exists, it's already set. If both are empty, it remains empty.
+        
+        # This is the item_code used for weight lookup. Should use the actual code if available.
+        # For "SLEVA", "DOPRAVA" this will be None, and weight lookup will be skipped (correct).
+        item_code_for_weight_lookup = raw_item_code if raw_item_code is not None and str(raw_item_code).lower() != "null" else None
+
+        quantity = item.get("quantity", 0)
+        # location = item.get("location", "") # Already present
+        location = item.get("location", "") 
+        unit_price = item.get("unit_price", 0.0)
+        total_price = item.get("total_price", 0.0)
+
+        # Calculate Preliminary Net Weight based on item_code_for_weight_lookup and quantity
+        preliminary_net_weight = "" 
+        if item_code_for_weight_lookup and product_weights_map:
+            unit_weight = product_weights_map.get(item_code_for_weight_lookup)
+            if unit_weight is not None:
+                try:
+                    numeric_quantity = float(quantity) if isinstance(quantity, (str, int, float)) else 0
+                    preliminary_net_weight = numeric_quantity * unit_weight
+                except ValueError:
+                    # Log with more context: csv_item_identifier (the code) and gemini_item_name_desc (the name)
+                    print(f"Warning: Could not convert quantity '{quantity}' to number for item code '{csv_item_identifier}' (Name: '{gemini_item_name_desc}'). Preliminary weight calculation skipped.")
+                    preliminary_net_weight = "N/A" 
+            else:
+                print(f"Warning: Weight not found for item_code '{item_code_for_weight_lookup}' (Name: '{gemini_item_name_desc}'). Preliminary weight calculation skipped.")
+                preliminary_net_weight = "NOT_FOUND" 
+        elif not product_weights_map:
+            preliminary_net_weight = "WEIGHT_DATA_MISSING"
+
+
+        items_for_csv.append({
+            "Page Number": page_number,
+            "Invoice Number": invoice_number,
+            "Item Name": csv_item_identifier, # Changed: Now uses the item code
+            "description": final_csv_description, # Changed: Now uses the combined descriptive text
+            "Location": location, 
+            "Quantity": quantity,
+            "Unit Price": unit_price,
+            "Total Price": total_price,
+            "Preliminary Net Weight": preliminary_net_weight, 
+            "Total Net Weight": "",
+            "Total Gross Weight": "", 
+            "Colný kód": "", 
+            "Popis colného kódu": "" 
+        })
     return items_for_csv
+
+def prepare_item_details_for_ai(item_row_dict):
+    """
+    Prepares a dictionary of item details from an item_row for AI processing,
+    specifically for assign_customs_code_with_ai.
+    """
+    item_identifier = item_row_dict.get("Item Name")
+    item_description = item_row_dict.get("description")
+    # item_row has "Location" (capital L), assign_customs_code_with_ai prompt expects lowercase "location"
+    item_origin = item_row_dict.get("Location") 
+
+    if not item_identifier: # If the main identifier (Item Name) is missing, it's hard to proceed meaningfully.
+        print(f"    Item has no 'Item Name' (identifier). Insufficient for customs code AI. Item: {item_row_dict}")
+        return "Item details are insufficient for AI processing."
+
+    details_for_ai = {
+        "item_code": item_identifier,    # Used in AI prompt as "Kód položky"
+        "Item Name": item_identifier,    # Used by the hardcoded override logic in assign_customs_code_with_ai
+        "description": item_description if item_description is not None else "", # Ensure string, AI handles empty as "Žiadny popis"
+        "location": item_origin if item_origin is not None else ""          # Ensure string, AI handles empty as "N/A"
+    }
+    return details_for_ai
 
 # Placeholder for the new AI model for customs code assignment
 # We can make this configurable later (e.g., from .env or constants)
@@ -318,21 +381,31 @@ def process_gemini_response_to_csv_rows(gemini_json_data, page_number, product_w
 
 def assign_customs_code_with_ai(item_details, all_customs_codes_map, genai_model_instance):
     """
-    Assigns a customs code to an item using a generative AI model.
-
-    Args:
-        item_details (dict): Dictionary containing item details like 
-                             'item_code', 'description', 'location'.
-        all_customs_codes_map (dict): A dictionary of all available customs codes 
-                                   and their descriptions {code: description}.
-        genai_model_instance: An initialized generative model instance (e.g., from genai.GenerativeModel()).
-
-    Returns:
-        str: The assigned customs code (e.g., '85444920') or 'NEURCENE' if unable to determine.
+    Assigns a customs code to an item using AI, with specific overrides.
+    If a direct match for item_code is found in overrides, that is used.
+    Otherwise, it uses AI and validates against all_customs_codes_map.
+    Returns the assigned code (or "NEURCENE") and the reasoning or an error message.
     """
-    if not item_details.get("description"):
-        print(f"    Item {item_details.get('item_code', 'N/A')} has no description. Skipping AI customs code assignment, setting to NEURCENE.")
-        return "NEURCENE"
+    # --- Start of new hardcoded override logic ---
+    item_code_for_override = item_details.get("Item Name", "").strip() # Changed "item_code" to "Item Name"
+    if item_code_for_override == "CZ-1263.1":
+        customs_code = "85311030"
+        # Fetch description from map if available, otherwise use a default
+        customs_code_description = all_customs_codes_map.get(customs_code, "Poplachové zariadenia na ochranu budov") 
+        print(f"INFO: Hardcoded customs code {customs_code} ('{customs_code_description}') assigned to item {item_code_for_override} due to override rule.")
+        return customs_code, "Hardcoded override for CZ-1263.1"
+    elif item_code_for_override == "JA-196J":
+        customs_code = "85311030"
+        customs_code_description = all_customs_codes_map.get(customs_code, "Poplachové zariadenia na ochranu budov")
+        print(f"INFO: Hardcoded customs code {customs_code} ('{customs_code_description}') assigned to item {item_code_for_override} due to override rule.")
+        return customs_code, "Hardcoded override for JA-196J"
+    # --- End of new hardcoded override logic ---
+
+    # Existing AI assignment logic starts here
+    # (Assuming the rest of the function follows after this block)
+    # if not item_details.get("description"):
+    #     print(f"    Item {item_details.get('item_code', 'N/A')} has no description. Skipping AI customs code assignment, setting to NEURCENE.")
+    #     return "NEURCENE", "No description provided"
 
     customs_codes_for_prompt = []
     if all_customs_codes_map:
@@ -402,288 +475,794 @@ def assign_customs_code_with_ai(item_details, all_customs_codes_map, genai_model
             print(f"    Full AI reasoning: {raw_response_text}")
             # assigned_code remains NEURCENE (default)
         
-        return assigned_code
+        return assigned_code, raw_response_text
 
     except Exception as e:
         print(f"    Error during AI customs code assignment: {e}")
-        return "NEURCENE"
+        return "NEURCENE", f"Error: {e}"
 
-def main():
-    pdf_input_directory = "data"  # Directory containing PDFs
-    data_output_directory = "data_output" # New directory for CSV outputs
-    base_image_output_directory = "pdf_images" # Base directory for page images
+def adjust_item_weights_to_target_totals_with_ai(items_data_list, target_total_net_kg, target_total_gross_kg, calculated_preliminary_total_net_kg, genai_model_instance):
+    """
+    Adjusts item net and gross weights to meet user-defined total targets using a generative AI model.
 
-    # Create the output directories if they don't exist
-    os.makedirs(data_output_directory, exist_ok=True)
-    os.makedirs(base_image_output_directory, exist_ok=True) # Ensure pdf_images also exists
+    Args:
+        items_data_list (list): List of dictionaries, where each dictionary represents an item.
+                                Expected keys: "Item Name" (item_code), "description", "Quantity",
+                                "Preliminary Net Weight" (string, comma as decimal).
+        target_total_net_kg (float): The user-defined target total net weight for the invoice.
+        target_total_gross_kg (float): The user-defined target total gross weight for the invoice.
+        calculated_preliminary_total_net_kg (float): The sum of "Preliminary Net Weight" for all items, as calculated by the script.
+        genai_model_instance: An initialized generative model instance.
 
-    # Define the path for the single combined CSV file within the new output directory
-    combined_csv_output_file = os.path.join(data_output_directory, "extracted_invoice_data.csv")
-    
-    # Load product weights
-    product_weights = load_product_weights() # Default path "data/product_weight.csv"
-    if not product_weights:
-        print("Continuing without net weight calculations as product weights could not be loaded.")
+    Returns:
+        list: A list of dictionaries, where each dictionary includes "Item Name",
+              "Final Net Weight" (string, comma as decimal), and "Final Gross Weight" (string, comma as decimal).
+              Returns an empty list or a list with error flags if AI processing fails.
+    """
+    if not items_data_list:
+        print("    ADJUST_AI: No items provided for weight adjustment.")
+        return []
 
-    # Load customs tariff codes
-    customs_tariff_map = load_customs_tariff_codes() # Default path "data/col_sadz.csv"
-    if not customs_tariff_map:
-        print("CRITICAL ERROR: Customs tariff codes could not be loaded from 'data/col_sadz.csv'.")
-        print("This is essential for the script to function correctly. Please check the file and error messages above.")
-        print("Exiting script.")
-        return # Exit main function, effectively stopping the script
-    else:
-        print(f"Successfully loaded and using {len(customs_tariff_map)} customs codes.") # Confirmation
-        print(f"DEBUG customs_tariff_map in main: {customs_tariff_map}") # For debugging
+    # Filter out items that don't have a valid preliminary net weight for the AI prompt
+    # These might be header/footer rows misinterpreted as items, or items with actual weight data issues.
+    valid_items_for_prompt = []
+    for item in items_data_list:
+        prelim_weight_str = item.get("Preliminary Net Weight", "")
+        if prelim_weight_str and prelim_weight_str not in ["QTY_ERR", "NO_WEIGHT_DATA"]:
+            try:
+                # Try converting to float to ensure it's a number before sending to AI
+                float(str(prelim_weight_str).replace(',', '.'))
+                valid_items_for_prompt.append({
+                    "item_code": item.get("Item Name", "N/A"),
+                    "description": item.get("description", "N/A"),
+                    "quantity": item.get("Quantity", "N/A"),
+                    "preliminary_net_weight_kg_str": prelim_weight_str # Keep as string for AI
+                })
+            except ValueError:
+                print(f"Warning: Item '{item.get('Item Name')}' has invalid Preliminary Net Weight '{prelim_weight_str}' and will be excluded from AI adjustment.")
+        else:
+            print(f"Warning: Item '{item.get('Item Name')}' missing valid Preliminary Net Weight ('{prelim_weight_str}') and will be excluded from AI adjustment.")
 
-    api_key = os.getenv("GOOGLE_API_KEY")
-    if not api_key:
-        print("Error: GOOGLE_API_KEY not found in environment variables. Please set it in your .env file.")
-        return
+    if not valid_items_for_prompt:
+        print("    ADJUST_AI: No valid items with preliminary weights to send to AI for adjustment.")
+        # We need to return a structure that matches what the calling code expects for all original items.
+        # So, we'll return the original items but flag that AI adjustment was skipped.
+        result_list = []
+        for item_orig in items_data_list:
+            result_list.append({
+                "Item Name": item_orig.get("Item Name", "N/A"),
+                "Final Net Weight": item_orig.get("Preliminary Net Weight", "AI_SKIP_NO_VALID_ITEMS"), # Or use original if valid
+                "Final Gross Weight": "AI_SKIP_NO_VALID_ITEMS"
+            })
+        return result_list
+
+    items_json_for_prompt = json.dumps(valid_items_for_prompt, ensure_ascii=False, indent=2)
+
+    prompt = (
+        f"Si expert na logistiku a colnú deklaráciu. Tvojou úlohou je upraviť ČISTÚ a HRUBÚ hmotnosť pre každú položku faktúry tak, aby celkové súčty zodpovedali presne definovaným cieľovým hodnotám. "
+        f"Musíš distribuovať rozdiely proporcionálne alebo logicky na základe predbežných hmotností položiek a ich množstva."
+        f"\\n"
+        f"Celková cieľová ČISTÁ hmotnosť faktúry (definovaná používateľom): {target_total_net_kg:.3f} kg\\n"
+        f"Celková cieľová HRUBÁ hmotnosť faktúry (definovaná používateľom): {target_total_gross_kg:.3f} kg\\n"
+        f"Predbežná celková ČISTÁ hmotnosť faktúry (vypočítaná skriptom zo súčtu položiek): {calculated_preliminary_total_net_kg:.3f} kg\\n"
+        f"Rozdiel, ktorý treba alokovať pre čistú hmotnosť: {(target_total_net_kg - calculated_preliminary_total_net_kg):.3f} kg\\n"
+        f"Celková hmotnosť obalov (rozdiel medzi cieľovou hrubou a cieľovou čistou hmotnosťou): {(target_total_gross_kg - target_total_net_kg):.3f} kg. Túto hmotnosť obalov musíš tiež logicky rozdeliť medzi položky."
+        f"\\n"
+        f"Nasleduje zoznam položiek faktúry s ich KÓDOM, POPISOM, MNOŽSTVOM a PREDBEŽNOU ČISTOU HMOTNOSŤOU (v kg, desatinná čiarka). "
+        f"Množstvá a popisy položiek NEMEŇ!"
+        f"Pre každú položku vráť jej KÓD POLOŽKY, finálnu ČISTÚ HMOTNOSŤ (Final Net Weight) a finálnu HRUBÚ HMOTNOSŤ (Final Gross Weight) v kg."
+        f"\\n"
+        f"Položky faktúry:\n{items_json_for_prompt}"
+        f"\\n"
+        f"PRAVIDLÁ pre úpravu:"
+        f"1. Súčet všetkých 'Final Net Weight' sa MUSÍ PRESNE ROVNAŤ {target_total_net_kg:.3f} kg."
+        f"2. Súčet všetkých 'Final Gross Weight' sa MUSÍ PRESNE ROVNAŤ {target_total_gross_kg:.3f} kg."
+        f"3. Pre KAŽDÚ položku musí platiť: 'Final Gross Weight' >= 'Final Net Weight'."
+        f"4. Hmotnosti nesmú byť záporné."
+        f"5. Rozdelenie úpravy hmotnosti by malo byť čo najviac proporcionálne k 'preliminary_net_weight_kg_str' danej položky. Položky s vyššou predbežnou hmotnosťou by mali absorbovať väčšiu časť celkovej úpravy."
+        f"6. Hmotnosť obalu pre každú položku (rozdiel medzi jej Final Gross Weight a Final Net Weight) by mala byť logická vzhľadom na typ a množstvo položky. Celkový súčet týchto individuálnych obalových hmotností musí zodpovedať celkovej hmotnosti obalov ({(target_total_gross_kg - target_total_net_kg):.3f} kg). Pri rozdeľovaní celkovej hmotnosti obalov medzi položky sa snažte o realistickú variabilitu. Nie všetky typy položiek budú mať rovnaký percentuálny podiel obalu na svojej čistej hmotnosti. Zohľadnite povahu položky (napr. krehkosť, veľkosť naznačená popisom alebo kódom) pri odhadovaní jej individuálneho obalu, pričom stále dodržujte presný celkový súčet hrubej hmotnosti. Jednotlivé priradené hmotnosti obalov (t.j. rozdiel 'Final Gross Weight' - 'Final Net Weight' pre každú položku) by NEMALI byť zaokrúhlené na jednoduché čísla (napr. 0.500, 1.000, 0.250). Mali by vyzerať ako presné, potenciálne 'menej pekné' čísla (napr. 0.537 kg, 0.281 kg, 1.079 kg), ktoré v súčte dajú presnú celkovú hmotnosť obalov."
+        f"7. Výstup MUSÍ byť validný JSON zoznam (list of objects). Každý objekt musí obsahovať presne tieto tri kľúče: 'item_code' (string, presne ako v vstupe), 'Final Net Weight' (string, formát X.XXX kg, POUŽI DESATINNÚ BODKU), 'Final Gross Weight' (string, formát X.XXX kg, POUŽI DESATINNÚ BODKU)."
+        f"Príklad požadovaného formátu jedného objektu v JSON zozname: {{ \"item_code\": \"KOD123\", \"Final Net Weight\": \"10.500\", \"Final Gross Weight\": \"11.200\" }}"
+        f"\\n"
+        f"DÔLEŽITÉ UPOZORNENIE: Over si svoje výpočty pred odoslaním odpovede! Súčet všetkých vrátených 'Final Net Weight' sa MUSÍ PRESNE ROVNAŤ {target_total_net_kg:.3f} kg. Súčet všetkých vrátených 'Final Gross Weight' sa MUSÍ PRESNE ROVNAŤ {target_total_gross_kg:.3f} kg. Akékoľvek odchýlky sú NEAKCEPTOVATEĽNÉ."
+        f"Dôkladne skontroluj súčty pred vrátením výsledku! Poskytni IBA JSON zoznam ako odpoveď, bez akéhokoľvek ďalšieho textu alebo vysvetlenia."
+    )
+
+    print(f"    ADJUST_AI: Prompt pre AI na úpravu hmotností:\n{prompt}")
+
     try:
-        genai.configure(api_key=api_key)
-        print("Google API Key configured.")
-        # Initialize the model for page analysis
-        page_analysis_model = genai.GenerativeModel(MODEL_NAME)
-        print(f"Initialized page analysis model: {MODEL_NAME}")
-        # Initialize the model for customs code assignment
-        customs_assignment_model = genai.GenerativeModel(CUSTOMS_ASSIGNMENT_MODEL_NAME)
-        print(f"Initialized customs assignment model: {CUSTOMS_ASSIGNMENT_MODEL_NAME}")
+        response = genai_model_instance.generate_content(prompt)
+        raw_response_text = response.text.strip()
+        print(f"    ADJUST_AI: Raw AI response for weight adjustment:\n{raw_response_text}")
+
+        # Clean the response if it's wrapped in ```json ... ```
+        cleaned_json_text = raw_response_text
+        if cleaned_json_text.startswith("```json"):
+            cleaned_json_text = cleaned_json_text[len("```json"):].strip()
+        if cleaned_json_text.startswith("```"): # General ``` removal
+            cleaned_json_text = cleaned_json_text[len("```"):].strip()
+        if cleaned_json_text.endswith("```"):
+            cleaned_json_text = cleaned_json_text[:-len("```")].strip()
+        
+        try:
+            adjusted_items_raw = json.loads(cleaned_json_text)
+        except json.JSONDecodeError as je:
+            print(f"    ADJUST_AI: JSONDecodeError for weight adjustment: {je}. Raw text was: '{cleaned_json_text}'")
+            # Fallback: return original items with error flags
+            result_list = []
+            for item_orig in items_data_list:
+                result_list.append({
+                    "Item Name": item_orig.get("Item Name", "N/A"),
+                    "Final Net Weight": item_orig.get("Preliminary Net Weight", "AI_JSON_DECODE_ERR"),
+                    "Final Gross Weight": "AI_JSON_DECODE_ERR"
+                })
+            return result_list
+
+        # Validate AI response structure and content
+        if not isinstance(adjusted_items_raw, list):
+            print("    ADJUST_AI: AI response is not a list.")
+            # Fallback
+            result_list = []
+            for item_orig in items_data_list:
+                result_list.append({
+                    "Item Name": item_orig.get("Item Name", "N/A"),
+                    "Final Net Weight": item_orig.get("Preliminary Net Weight", "AI_BAD_FORMAT_NON_LIST"),
+                    "Final Gross Weight": "AI_BAD_FORMAT_NON_LIST"
+                })
+            return result_list
+
+        # Convert AI response to the desired format and map it back to original items
+        # This ensures we return a list that corresponds to the full `items_data_list`
+        # including items that might have been filtered out from the AI prompt.
+        final_adjusted_results_map = {adj_item.get("item_code"): adj_item for adj_item in adjusted_items_raw if isinstance(adj_item, dict)}
+        
+        output_list_for_all_items = []
+        sum_final_net_kg_check = 0.0
+        sum_final_gross_kg_check = 0.0
+
+        # Temporary list to hold items with float weights from AI for correction
+        items_for_programmatic_correction = [] 
+
+        for original_item in items_data_list:
+            item_code_original = original_item.get("Item Name", "N/A")
+            ai_adjusted_data = final_adjusted_results_map.get(item_code_original)
+
+            # Initialize with error/fallback values
+            current_item_details_for_correction = {
+                "Item Name": item_code_original,
+                "original_preliminary_net_weight_str": original_item.get("Preliminary Net Weight", ""),
+                "ai_final_net_kg": 0.0, # Parsed from AI, dot decimal
+                "ai_final_gross_kg": 0.0, # Parsed from AI, dot decimal
+                "is_error": True,
+                "error_type": "ERROR_AI_NO_DATA"
+            }
+
+            if ai_adjusted_data:
+                final_net_str = ai_adjusted_data.get("Final Net Weight")
+                final_gross_str = ai_adjusted_data.get("Final Gross Weight")
+
+                if final_net_str is not None and final_gross_str is not None:
+                    try:
+                        net_val = float(str(final_net_str)) 
+                        gross_val = float(str(final_gross_str))
+
+                        if gross_val < net_val:
+                            print(f"    ADJUST_AI_VALIDATION: For item '{item_code_original}', AI returned Gross Weight ({gross_val}) < Net Weight ({net_val}). Flagging.")
+                            current_item_details_for_correction["error_type"] = "ERR_GROSS_LT_NET"
+                            # Still use the values for now, correction might fix or propagate error string
+                            current_item_details_for_correction["ai_final_net_kg"] = net_val
+                            current_item_details_for_correction["ai_final_gross_kg"] = gross_val
+                        elif net_val < 0:
+                            print(f"    ADJUST_AI_VALIDATION: For item '{item_code_original}', AI returned negative Net Weight ({net_val}). Flagging.")
+                            current_item_details_for_correction["error_type"] = "ERR_NEGATIVE"
+                            current_item_details_for_correction["ai_final_net_kg"] = net_val
+                            current_item_details_for_correction["ai_final_gross_kg"] = gross_val 
+                        else:
+                            current_item_details_for_correction["ai_final_net_kg"] = net_val
+                            current_item_details_for_correction["ai_final_gross_kg"] = gross_val
+                            current_item_details_for_correction["is_error"] = False # Mark as initially valid from AI
+                            sum_final_net_kg_check += net_val # Sum for initial AI check
+                            sum_final_gross_kg_check += gross_val # Sum for initial AI check
+
+                    except ValueError as ve:
+                        print(f"    ADJUST_AI: ValueError converting AI weights for item '{item_code_original}': {ve}. Values: Net='{final_net_str}', Gross='{final_gross_str}'. Flagging.")
+                        current_item_details_for_correction["error_type"] = "ERR_CONVERT"
+                else:
+                    print(f"    ADJUST_AI: Missing 'Final Net Weight' or 'Final Gross Weight' key from AI for item '{item_code_original}'.")
+                    current_item_details_for_correction["error_type"] = "ERR_AI_KEY_MISSING"
+            else:
+                # This item was not in AI's response (e.g., it was filtered out)
+                print(f"    ADJUST_AI: Item '{item_code_original}' not found in AI's adjusted list.")
+                current_item_details_for_correction["error_type"] = "NOT_IN_AI_RESP"
+            
+            items_for_programmatic_correction.append(current_item_details_for_correction)
+
+        # Initial check of AI sums (before programmatic correction)
+        tolerance = 0.001 * len(valid_items_for_prompt) 
+        if not (abs(sum_final_net_kg_check - target_total_net_kg) < tolerance):
+            print(f"    ADJUST_AI_VALIDATION (Pre-correction): Sum of AI Net Weights ({sum_final_net_kg_check:.3f} kg) DOES NOT MATCH target ({target_total_net_kg:.3f} kg). Diff: {(sum_final_net_kg_check - target_total_net_kg):.3f} kg")
+        if not (abs(sum_final_gross_kg_check - target_total_gross_kg) < tolerance):
+            print(f"    ADJUST_AI_VALIDATION (Pre-correction): Sum of AI Gross Weights ({sum_final_gross_kg_check:.3f} kg) DOES NOT MATCH target ({target_total_gross_kg:.3f} kg). Diff: {(sum_final_gross_kg_check - target_total_gross_kg):.3f} kg")
+
+        # --- Programmatic Sum Correction --- 
+        # 1. Correct Net Weights
+        current_sum_ai_net_kg = sum(item['ai_final_net_kg'] for item in items_for_programmatic_correction if not item['is_error'] and item["error_type"] != "NOT_IN_AI_RESP")
+        net_difference = target_total_net_kg - current_sum_ai_net_kg
+        
+        # Distribute net_difference proportionally among non-error items
+        # Use preliminary net weights for proportion if AI weights are zero or problematic for proportion
+        # For simplicity, if ai_final_net_kg is 0, it won't get any adjustment from this proportional step.
+        # This could be refined if items legitimately have 0 net weight but need to absorb some diff.
+        total_proportional_net_base = sum(item['ai_final_net_kg'] for item in items_for_programmatic_correction if not item['is_error'] and item['ai_final_net_kg'] > 0 and item["error_type"] != "NOT_IN_AI_RESP")
+
+        if abs(net_difference) > 1e-9: # If there is a notable difference
+            print(f"    PROGRAMMATIC_CORRECTION: Net difference to distribute: {net_difference:.6f} kg")
+            if total_proportional_net_base > 1e-9:
+                for item in items_for_programmatic_correction:
+                    if not item['is_error'] and item['ai_final_net_kg'] > 0 and item["error_type"] != "NOT_IN_AI_RESP":
+                        proportion = item['ai_final_net_kg'] / total_proportional_net_base
+                        item['corrected_final_net_kg'] = item['ai_final_net_kg'] + (net_difference * proportion)
+                    elif not item['is_error'] and item["error_type"] != "NOT_IN_AI_RESP": # Item had 0 net weight from AI, keep it 0
+                        item['corrected_final_net_kg'] = 0.0
+                    else: # Error items or items not in AI response
+                        item['corrected_final_net_kg'] = item['ai_final_net_kg'] # Keep AI's (potentially 0) or error state
+            else: # All items had 0 net weight or no valid items; distribute equally if possible (rare case)
+                # This case needs careful handling; for now, log and don't adjust if no base for proportion
+                print("    PROGRAMMATIC_CORRECTION: Warning - Cannot distribute net difference proportionally, no positive net weights from AI or no valid items.")
+                for item in items_for_programmatic_correction:
+                    item['corrected_final_net_kg'] = item['ai_final_net_kg'] # Fallback
+        else: # No significant net difference
+            for item in items_for_programmatic_correction:
+                item['corrected_final_net_kg'] = item['ai_final_net_kg']
+
+        # 2. Correct Gross Weights (based on corrected net weights)
+        sum_of_corrected_final_net_weights = sum(item['corrected_final_net_kg'] for item in items_for_programmatic_correction if not item['is_error'] and item["error_type"] != "NOT_IN_AI_RESP")
+        total_packaging_allowance = target_total_gross_kg - sum_of_corrected_final_net_weights
+        current_sum_ai_packaging_kg = sum(max(0, item['ai_final_gross_kg'] - item['ai_final_net_kg']) for item in items_for_programmatic_correction if not item['is_error'] and item["error_type"] != "NOT_IN_AI_RESP")
+
+        packaging_difference = total_packaging_allowance - current_sum_ai_packaging_kg
+
+        # Base for distributing packaging difference: AI's originally intended packaging weight per item (Gross-Net)
+        # Use a small epsilon for items where AI had Gross == Net, so they can still receive some packaging if needed.
+        epsilon_packaging = 1e-6 
+        total_proportional_packaging_base = sum(max(epsilon_packaging, item['ai_final_gross_kg'] - item['ai_final_net_kg']) for item in items_for_programmatic_correction if not item['is_error'] and item["error_type"] != "NOT_IN_AI_RESP")
+        
+        if abs(packaging_difference) > 1e-9:
+            print(f"    PROGRAMMATIC_CORRECTION: Packaging difference to distribute: {packaging_difference:.6f} kg")
+            if total_proportional_packaging_base > 1e-9:
+                for item in items_for_programmatic_correction:
+                    if not item['is_error'] and item["error_type"] != "NOT_IN_AI_RESP":
+                        ai_item_packaging = max(epsilon_packaging, item['ai_final_gross_kg'] - item['ai_final_net_kg'])
+                        proportion = ai_item_packaging / total_proportional_packaging_base
+                        item_packaging_adjustment = packaging_difference * proportion
+                        item['corrected_final_gross_kg'] = item['corrected_final_net_kg'] + ai_item_packaging + item_packaging_adjustment
+                        # Ensure gross >= net after correction
+                        if item['corrected_final_gross_kg'] < item['corrected_final_net_kg']:
+                            item['corrected_final_gross_kg'] = item['corrected_final_net_kg'] # Set to net if undershot
+                    else: # Error items or items not in AI response
+                        item['corrected_final_gross_kg'] = item['ai_final_gross_kg'] # Keep AI's or error state
+            else:
+                print("    PROGRAMMATIC_CORRECTION: Warning - Cannot distribute packaging difference proportionally, no positive packaging weights from AI or no valid items.")
+                for item in items_for_programmatic_correction:
+                    # Fallback: make gross = corrected net + some equal share if possible, or just corrected net
+                    # This path means AI gave all items Gross == Net, and we need to add packaging_difference
+                    # For now, just set gross = corrected net, if packaging_difference is positive, it won't be distributed here
+                    item['corrected_final_gross_kg'] = item['corrected_final_net_kg'] 
+                    if not item['is_error'] and item["error_type"] != "NOT_IN_AI_RESP" and packaging_difference > 0 and len([i for i in items_for_programmatic_correction if not i['is_error']]) > 0:
+                        item['corrected_final_gross_kg'] += packaging_difference / len([i for i in items_for_programmatic_correction if not i['is_error']])
+        else: # No significant packaging difference
+             for item in items_for_programmatic_correction:
+                if not item['is_error'] and item["error_type"] != "NOT_IN_AI_RESP":
+                    # Use AI's gross if it was valid, otherwise ensure it respects corrected net
+                    # This re-bases gross on the corrected_final_net_kg + AI's intended packaging
+                    item_ai_packaging = item['ai_final_gross_kg'] - item['ai_final_net_kg']
+                    item['corrected_final_gross_kg'] = item['corrected_final_net_kg'] + item_ai_packaging
+                    if item['corrected_final_gross_kg'] < item['corrected_final_net_kg']:
+                         item['corrected_final_gross_kg'] = item['corrected_final_net_kg']
+                else:
+                    item['corrected_final_gross_kg'] = item['ai_final_gross_kg']
+
+        # --- End Programmatic Sum Correction ---
+
+        # Prepare final list for output, converting to string with comma decimal
+        output_list_for_all_items = []
+        final_sum_net_check = 0.0
+        final_sum_gross_check = 0.0
+
+        for item_detail in items_for_programmatic_correction:
+            final_net_val_to_str = "ERROR"
+            final_gross_val_to_str = "ERROR"
+
+            if item_detail['is_error']:
+                final_net_val_to_str = item_detail.get('original_preliminary_net_weight_str', item_detail['error_type'])
+                final_gross_val_to_str = item_detail['error_type']
+                if item_detail["error_type"] == "ERR_GROSS_LT_NET": # Special case from AI, try to use numbers
+                    final_net_val_to_str = f"{item_detail['ai_final_net_kg']:.3f}".replace('.', ',')
+                    final_gross_val_to_str = f"{item_detail['ai_final_gross_kg']:.3f}".replace('.', ',') + "_ERR_GROSS_LT_NET"
+                elif item_detail["error_type"] == "ERR_NEGATIVE":
+                    final_net_val_to_str = f"{item_detail['ai_final_net_kg']:.3f}".replace('.', ',') + "_ERR_NEGATIVE"
+                    final_gross_val_to_str = f"{item_detail['ai_final_gross_kg']:.3f}".replace('.', ',')
+
+            else:
+                # Ensure gross is not less than net after all corrections for valid items
+                if item_detail['corrected_final_gross_kg'] < item_detail['corrected_final_net_kg']:
+                    item_detail['corrected_final_gross_kg'] = item_detail['corrected_final_net_kg']
+                    print(f"    POST_CORRECTION_ADJUST: Item '{item_detail['Item Name']}' had gross < net, setting gross = net.")
+                
+                # Ensure weights are not negative after corrections
+                if item_detail['corrected_final_net_kg'] < 0:
+                    item_detail['corrected_final_net_kg'] = 0.0 # Force non-negative
+                    print(f"    POST_CORRECTION_ADJUST: Item '{item_detail['Item Name']}' had negative net weight, set to 0.")
+                if item_detail['corrected_final_gross_kg'] < 0:
+                    item_detail['corrected_final_gross_kg'] = 0.0 # Force non-negative
+                    print(f"    POST_CORRECTION_ADJUST: Item '{item_detail['Item Name']}' had negative gross weight, set to 0.")
+
+
+                final_net_val_to_str = f"{item_detail['corrected_final_net_kg']:.3f}".replace('.', ',')
+                final_gross_val_to_str = f"{item_detail['corrected_final_gross_kg']:.3f}".replace('.', ',')
+                final_sum_net_check += item_detail['corrected_final_net_kg']
+                final_sum_gross_check += item_detail['corrected_final_gross_kg']
+            
+            output_list_for_all_items.append({
+                "Item Name": item_detail["Item Name"],
+                "Total Net Weight": final_net_val_to_str,
+                "Total Gross Weight": final_gross_val_to_str
+            })
+        
+        # Final check of sums after programmatic correction
+        # Use a slightly more forgiving tolerance for the final check due to potential cascading float issues
+        final_tolerance = 1e-5 # Very small tolerance for final check
+        if not (abs(final_sum_net_check - target_total_net_kg) < final_tolerance):
+            print(f"    PROGRAMMATIC_CORRECTION_VALIDATION: FINAL Sum of Net Weights ({final_sum_net_check:.6f} kg) DOES NOT MATCH target ({target_total_net_kg:.3f} kg) within tolerance {final_tolerance}. Diff: {(final_sum_net_check - target_total_net_kg):.6f} kg")
+        else:
+            print(f"    PROGRAMMATIC_CORRECTION_VALIDATION: FINAL Sum of Net Weights ({final_sum_net_check:.6f} kg) matches target ({target_total_net_kg:.3f} kg) perfectly or within tolerance.")
+
+        if not (abs(final_sum_gross_check - target_total_gross_kg) < final_tolerance):
+            print(f"    PROGRAMMATIC_CORRECTION_VALIDATION: FINAL Sum of Gross Weights ({final_sum_gross_check:.6f} kg) DOES NOT MATCH target ({target_total_gross_kg:.3f} kg) within tolerance {final_tolerance}. Diff: {(final_sum_gross_check - target_total_gross_kg):.6f} kg")
+        else:
+            print(f"    PROGRAMMATIC_CORRECTION_VALIDATION: FINAL Sum of Gross Weights ({final_sum_gross_check:.6f} kg) matches target ({target_total_gross_kg:.3f} kg) perfectly or within tolerance.")
+
+        return output_list_for_all_items
 
     except Exception as e:
-        print(f"Error configuring Google API Key or initializing models: {e}")
-        return
-
-    pdf_file_paths = glob.glob(os.path.join(pdf_input_directory, "*.pdf"))
-
-    if not pdf_file_paths:
-        print(f"No PDF files found in directory: '{pdf_input_directory}'. Please place your PDFs there.")
-        return
-    
-    print(f"Found {len(pdf_file_paths)} PDF files to process: {pdf_file_paths}")
-
-    # Ask user for CSV output preference in Slovak, using numbers
-    user_choice_internal = ""
-    while True:
-        print("Prajete si:")
-        print("1. Jeden spoločný CSV súbor pre všetky faktúry")
-        print("2. Samostatné CSV súbory pre každú faktúru")
-        choice_input = input("Zadajte číslo (1 alebo 2): ").strip()
-        if choice_input == '1':
-            user_choice_internal = 'single'
-            break
-        elif choice_input == '2':
-            user_choice_internal = 'separate'
-            break
-        else:
-            print("Neplatná voľba. Zadajte prosím 1 alebo 2.")
-
-    # This prompt is used for all PDFs and all pages
-    extraction_prompt = f"""Analyze the invoice page. Extract the overall invoice number. \
-Then, identify all line items. For each line item, extract its item code (e.g., CC-01, JA-103K-7AH), \
-its textual description (this is important, extract as 'description'), \
-location, quantity, unit price, and total price. \
-Return the information as a single JSON object. The JSON object should have two top-level keys: \
-1. 'invoice_number': A string for the invoice number (use null if not found). \
-2. 'items': A list of objects, where each object represents a line item and has the following keys: \
-'item_code' (string, e.g., CC-01), 'description' (string, textual description of the item), \
-'location' (string), 'quantity' (string or number), \
-'unit_price' (string or number), 'total_price' (string or number). \
-If an item is missing one of these primary fields (item_code, description, location, quantity, unit_price, total_price), use an empty string or null. \
-If no line items are found on the page, 'items' should be an empty list. \
-Ensure the entire output is a valid JSON. Example item object (within the 'items' list): \
-{{\\\"item_code\\\": \\\"CC-01\\\", \\\"description\\\": \\\"Network Cable UTP Cat6 5m\\\", \\\"location\\\": \\\"SK\\\", \\\"quantity\\\": \\\"2.00\\\", \\\"unit_price\\\": \\\"86.73\\\", \\\"total_price\\\": \\\"173.46\\\"}}"""
-    
-    master_data_from_all_pdfs = [] # To store processed data from all PDFs
-    first_pdf_processed = True # Flag to control separator for single CSV
-
-    for pdf_path in pdf_file_paths:
-        pdf_filename = os.path.basename(pdf_path)
-        pdf_name_without_ext = os.path.splitext(pdf_filename)[0]
-        
-        # Create a unique output folder for this PDF's images
-        current_pdf_image_folder = os.path.join(base_image_output_directory, pdf_name_without_ext)
-        if not os.path.exists(current_pdf_image_folder):
-            os.makedirs(current_pdf_image_folder)
-            print(f"Created image subfolder: {current_pdf_image_folder}")
-
-        print(f"\\nProcessing PDF: {pdf_filename}...")
-        image_paths_for_current_pdf = pdf_to_images(pdf_path, current_pdf_image_folder)
-        
-        if not image_paths_for_current_pdf:
-            print(f"Skipping PDF {pdf_filename} due to image conversion errors.")
-            # Add a placeholder to master_data if single CSV is chosen, so user knows it was skipped
-            if user_choice_internal == 'single':
-                master_data_from_all_pdfs.append({
-                    "Invoice Number": "CONVERSION FAILED",
-                    "Page Number": "",
-                    "Row Number": "",
-                    "Item Name": f"Failed to convert {pdf_filename} to images",
-                    "description": "",
-                    "Location": "", "Quantity": "", "Unit Price": "", "Total Price": "", "Total Net Weight": "",
-                    "Colný kód": "",
-                    "Popis colného kódu": ""
-                })
-            continue
-
-        all_items_from_current_pdf = []
-        
-        # Add separator row for single CSV output, if not the first PDF
-        if user_choice_internal == 'single' and not first_pdf_processed:
-            master_data_from_all_pdfs.append({
-                "Invoice Number": "---",
-                "Page Number": "---",
-                "Row Number": "---",
-                "Item Name": f"--- NEW INVOICE: {pdf_filename} ---",
-                "description": "---",
-                "Location": "---", "Quantity": "---", "Unit Price": "---", "Total Price": "---", "Total Net Weight": "---",
-                "Colný kód": "---",
-                "Popis colného kódu": "---"
+        print(f"    ADJUST_AI: Error during AI weight adjustment call: {e}")
+        # Fallback: return original items with error flags
+        result_list = []
+        for item_orig in items_data_list:
+            result_list.append({
+                "Item Name": item_orig.get("Item Name", "N/A"),
+                "Final Net Weight": item_orig.get("Preliminary Net Weight", "AI_EXCEPTION"),
+                "Final Gross Weight": "AI_EXCEPTION"
             })
-        first_pdf_processed = False # Reset for subsequent PDFs if single output
+        return result_list
 
-        page_counter_for_pdf = 1
-        for image_path in image_paths_for_current_pdf:
-            print(f"Analyzing page {page_counter_for_pdf} of {pdf_filename} (image: {os.path.basename(image_path)})...")
-            gemini_response = analyze_image_with_gemini(image_path, extraction_prompt)
+def run_pdf_processing_flow():
+    """
+    Main flow to process PDF invoices.
+    Converts PDFs to images, analyzes with Gemini, assigns customs codes,
+    adjusts weights, and writes data to CSV.
+    """
+    print(f"Starting PDF processing flow...")
+
+    # Ensure output directories exist
+    os.makedirs(OUTPUT_CSV_DIR, exist_ok=True)
+    os.makedirs(PDF_IMAGE_DIR, exist_ok=True)
+    os.makedirs(PROCESSED_PDF_DIR, exist_ok=True) # Create processed_invoices directory
+
+    product_weights = load_product_weights() # Load weights once
+    all_customs_codes_map = load_customs_tariff_codes() # Load all codes once
+
+    # Initialize AI Models (ensure API key is configured before this point if needed by genai.GenerativeModel)
+    # This is typically handled in main() before calling this function.
+    # Consider passing model instances if they are initialized outside.
+    # For now, assuming genai.configure has been called.
+    if not os.getenv("GOOGLE_API_KEY"):
+        print("Error: GOOGLE_API_KEY not found. AI features will be unavailable.")
+        # return # Exit if AI is critical
+
+    # It's better to initialize models once if possible, or pass them as arguments
+    # For simplicity here, initializing as needed, but be mindful of quotas/performance
+    # genai.configure(api_key=os.getenv("GOOGLE_API_KEY")) # Ensure this is called before model creation
+    
+    customs_model = genai.GenerativeModel(CUSTOMS_ASSIGNMENT_MODEL_NAME)
+    weight_adjustment_model = genai.GenerativeModel(MODEL_NAME)
+
+
+    # Determine which PDFs to process
+    pdf_files_to_process = [f for f in os.listdir(INPUT_PDF_DIR) if f.lower().endswith(".pdf")]
+    if not pdf_files_to_process:
+        print(f"No PDF files found in '{INPUT_PDF_DIR}'. Nothing to process.")
+        return
+    print(f"Found {len(pdf_files_to_process)} PDF files to process in '{INPUT_PDF_DIR}'.")
+
+    # Iterate through all PDF files in the input directory
+    for pdf_file in pdf_files_to_process:
+        pdf_path = os.path.join(INPUT_PDF_DIR, pdf_file)
+        print(f"\\n--- Processing PDF: {pdf_path} ---")
+        all_items_for_invoice = [] # Holds all items from all pages of a single PDF
+        invoice_id_for_filename = os.path.splitext(pdf_file)[0] # Use PDF name as default invoice ID
+
+        # --- Step 1: Convert PDF to Images ---
+        # Ensure PDF_IMAGE_DIR is cleaned or managed appropriately if images persist
+        # For simplicity, we are overwriting images if names clash from previous runs not related to current PDF
+        image_paths_current_pdf = pdf_to_images(pdf_path, PDF_IMAGE_DIR)
+
+        if not image_paths_current_pdf:
+            print(f"Skipping {pdf_file} as it could not be converted to images.")
+            continue # Move to the next PDF file
+
+        # --- Step 2: Analyze Images with Gemini ---
+        gemini_extraction_prompt_template = """
+Analyze the provided invoice image to extract structured data.
+The invoice contains information about items, quantities, prices, and potentially an overall invoice number.
+Please return the data in JSON format with the following structure:
+{
+  "invoice_number": "INV12345", // Extract if present, otherwise use "N/A" or derive from filename if instructed
+  "items": [
+    {
+      "item_code": "CODE123", // Product code or registration number, if available. Can be alphanumeric.
+      "item_name": "Product Name Example", // Full name of the item.
+      "description": "Detailed description of the item, including any additional notes or specifications found on the invoice. (e.g. recyklační příspěvek 0,2951 EUR bez DPH / 1 kg)", // Detailed description
+      "quantity": 10, // Number of units. Must be a number.
+      "unit_price": 25.99, // Price per unit. Must be a number.
+      "total_price": 259.90, // Total price for the item (quantity * unit_price). Must be a number.
+      "location": "EXTRACT THE COUNTRY OF ORIGIN. This is usually a 2-letter code (e.g., GB, CZ, CN, DE) found next to the item code, or written as 'Made in X' or 'Origin: Y'. If no country of origin is found for an item, use null.",
+      "currency": "EUR" // Currency code (e.g., EUR, USD, CZK). Extract if present, default to "EUR" if not specified.
+    }
+    // ... more items
+  ]
+}
+
+Specific instructions for extraction:
+- Ensure all numeric fields (quantity, unit_price, total_price) are numbers, not strings. Use dot (.) as decimal separator.
+- If an item is a discount or a fee (e.g., "SLEVA", "DOPRAVA"), represent its value appropriately (e.g., negative for discount in unit_price or total_price). For such non-product lines, if a field like 'item_code' or 'location' is not applicable, use "N/A" or null respectively.
+- For "item_code", prioritize the distinct product identifier.
+- For "item_name", use the most descriptive name provided.
+- For "description", capture any supplementary text associated with the item.
+- The "location" field is CRITICAL: Accurately extract the Country of Origin. Look for two-letter codes (CZ, GB, CN) near the item code or phrases like "Made in [Country]". If not found, explicitly use null.
+- If an invoice spans multiple pages, process each page's items.
+- Return ONLY the JSON structure. Do not include any other text or explanations before or after the JSON.
+"""
+        # Iterate over each image (page) from the PDF
+        for i, image_path in enumerate(image_paths_current_pdf):
+            print(f"Analyzing page {i + 1} of {pdf_file} ({image_path})...")
+            # Adapt prompt if necessary for multi-page, e.g., to link items to the correct invoice ID
+            # For now, assuming each page can have its own set of items or belongs to one main invoice ID from the PDF name.
             
-            processed_page_items_raw = process_gemini_response_to_csv_rows(gemini_response, page_counter_for_pdf, product_weights)
-            
-            processed_page_items_with_customs = []
-            for item_data_raw in processed_page_items_raw:
-                item_data = dict(item_data_raw)
-
-                is_data_row = True
-                if (item_data.get("Invoice Number") in ["PARSING FAILED", "CONVERSION FAILED"] or \
-                    "Error:" in item_data.get("Item Name", "") or \
-                    "No items found" in item_data.get("Item Name", "")):
-                    is_data_row = False
-
-                if is_data_row and item_data.get("Item Name"): 
-                    current_item_details = {
-                        "item_code": item_data.get("Item Name"),
-                        "description": item_data.get("description"), 
-                        "location": item_data.get("Location")
-                    }
-                    
-                    assigned_customs_code = assign_customs_code_with_ai(current_item_details, customs_tariff_map, customs_assignment_model)
-                    customs_code_description = customs_tariff_map.get(assigned_customs_code, "Popis nenájdený") if assigned_customs_code != "NEURCENE" else ""
-                    
-                    item_data["Colný kód"] = assigned_customs_code
-                    item_data["Popis colného kódu"] = customs_code_description
-                    processed_page_items_with_customs.append(item_data)
-                else:
-                    item_data["Colný kód"] = item_data.get("Colný kód", "") 
-                    item_data["Popis colného kódu"] = item_data.get("Popis colného kódu", "")
-                    processed_page_items_with_customs.append(item_data)
-            
-            all_items_from_current_pdf.extend(processed_page_items_with_customs)
-            page_counter_for_pdf += 1
-
-        # Add row numbers for the items extracted from the current PDF
-        # This ensures row numbers restart for each PDF
-        items_from_current_pdf_with_row_numbers = []
-        current_row_number = 1
-        for item_data in all_items_from_current_pdf:
-            # Only add row numbers to actual data rows, not error/placeholder rows from process_gemini_response
-            if item_data.get("Invoice Number") not in ["PARSING FAILED", "CONVERSION FAILED"] and "No items found" not in item_data.get("Item Name", ""):
-                 # and "Error:" not in item_data.get("Item Name", ""): # More specific check for actual items
-                item_data_with_rn = {"Row Number": current_row_number, **item_data}
-                current_row_number += 1
-            else: # Keep placeholder/error rows as they are, without adding a new Row Number
-                item_data_with_rn = {**item_data} # Ensure "Row Number" key exists if not already
-                if "Row Number" not in item_data_with_rn:
-                    item_data_with_rn["Row Number"] = ""
+            # If invoice_id_for_filename is already set from a previous page,
+            # we might not need to ask Gemini for it again, or we could ask it to confirm.
+            # For this version, we let Gemini try to extract it per page, and the CSV processing aggregates.
+            current_page_prompt = gemini_extraction_prompt_template
+            if invoice_id_for_filename != os.path.splitext(pdf_file)[0] and invoice_id_for_filename != "N/A":
+                 current_page_prompt = gemini_extraction_prompt_template.replace(
+                     'use "N/A" or derive from filename if instructed', 
+                     f'This page belongs to invoice "{invoice_id_for_filename}". Please confirm or use this if no other number is found.'
+                 )
 
 
-            items_from_current_pdf_with_row_numbers.append(item_data_with_rn)
-        
-        if user_choice_internal == 'single':
-            master_data_from_all_pdfs.extend(items_from_current_pdf_with_row_numbers)
-        elif user_choice_internal == 'separate':
-            headers = ["Invoice Number", "Page Number", "Row Number", "Item Name", "description", "Location", "Quantity", "Unit Price", "Total Price", "Total Net Weight", "Colný kód", "Popis colného kódu"]
-            individual_csv_filename = os.path.join(data_output_directory, f"{pdf_name_without_ext}_extracted.csv")
-            print(f"Writing extracted data for {pdf_filename} to {individual_csv_filename}...")
-            
-            if items_from_current_pdf_with_row_numbers:
-                try:
-                    with open(individual_csv_filename, 'w', newline='', encoding='utf-8') as csvfile:
-                        writer = csv.DictWriter(csvfile, fieldnames=headers)
-                        writer.writeheader()
-                        writer.writerows(items_from_current_pdf_with_row_numbers)
-                    print(f"Successfully wrote data for {pdf_filename} to {individual_csv_filename}")
-                except IOError as e:
-                    print(f"IOError writing CSV for {pdf_filename}: {e}")
+            gemini_data_page = analyze_image_with_gemini(image_path, current_page_prompt)
+
+            if gemini_data_page and "error" not in gemini_data_page:
+                page_invoice_number = gemini_data_page.get("invoice_number")
+                if page_invoice_number and (invoice_id_for_filename == os.path.splitext(pdf_file)[0] or invoice_id_for_filename == "N/A"):
+                    # Prioritize invoice number found by Gemini if it's the first one or more specific
+                    invoice_id_for_filename = page_invoice_number
+                    print(f"Invoice number set/updated to: '{invoice_id_for_filename}' from page {i+1}.")
+
+                page_items = process_gemini_response_to_csv_rows(gemini_data_page, i + 1, product_weights)
+                all_items_for_invoice.extend(page_items)
+                print(f"Found {len(page_items)} items on page {i + 1} of {pdf_file}.")
             else:
-                # Create an empty CSV with headers if no items were extracted or conversion failed earlier
-                # but we still want a file representing this PDF
-                try:
-                    with open(individual_csv_filename, 'w', newline='', encoding='utf-8') as csvfile:
-                        writer = csv.DictWriter(csvfile, fieldnames=headers)
-                        writer.writeheader()
-                        # Optionally write a single row indicating no data or conversion failure
-                        writer.writerow({
-                            "Invoice Number": "N/A or CONVERSION FAILED", 
-                            "Page Number": "", 
-                            "Row Number": "", 
-                            "Item Name": f"No data extracted or conversion failed for {pdf_filename}",
-                            "description": "",
-                            "Location": "", "Quantity": "", "Unit Price": "", "Total Price": "", "Total Net Weight": "",
-                            "Colný kód": "",
-                            "Popis colného kódu": ""
-                        })
-                    print(f"Wrote empty/placeholder CSV for {pdf_filename} to {individual_csv_filename} as no data was extracted or conversion failed.")
-                except IOError as e:
-                    print(f"IOError writing empty CSV for {pdf_filename}: {e}")
+                error_msg = gemini_data_page.get("error", "Unknown error") if isinstance(gemini_data_page, dict) else "Raw analysis failed"
+                print(f"Skipping page {i + 1} of {pdf_file} due to Gemini analysis error: {error_msg}")
+                # Add a placeholder row for the failed page if necessary for tracking
+                all_items_for_invoice.append({
+                    "Page Number": i + 1,
+                    "Invoice Number": invoice_id_for_filename, # Use last known or default
+                    "Item Name": f"PAGE ANALYSIS FAILED: {error_msg}",
+                    "description": "", "Location": "", "Quantity": "", "Unit Price": "", "Total Price": "",
+                    "Preliminary Net Weight": "", "Total Net Weight": "", "Total Gross Weight": "",
+                    "Colný kód": "", "Popis colného kódu": ""
+                })
+        
+        # Clean invoice_id_for_filename if it became too complex or still default
+        if not invoice_id_for_filename or invoice_id_for_filename == os.path.splitext(pdf_file)[0]:
+            invoice_id_for_filename = os.path.splitext(pdf_file)[0] # Fallback to filename
+            print(f"Using PDF filename as base for invoice ID: '{invoice_id_for_filename}'")
+        elif invoice_id_for_filename == "N/A":
+             invoice_id_for_filename = f"UnknownInvoice_{os.path.splitext(pdf_file)[0]}" # Make it unique
+             print(f"Invoice ID not found by AI, using derived ID: '{invoice_id_for_filename}'")
 
 
-    # CSV Writing Logic - now conditional
-    if user_choice_internal == 'single':
-        if master_data_from_all_pdfs:
-            headers = ["Invoice Number", "Page Number", "Row Number", "Item Name", "description", "Location", "Quantity", "Unit Price", "Total Price", "Total Net Weight", "Colný kód", "Popis colného kódu"]
-            print(f"\\nWriting all extracted data to {combined_csv_output_file}...")
-            try:
-                with open(combined_csv_output_file, 'w', newline='', encoding='utf-8') as csvfile:
-                    writer = csv.DictWriter(csvfile, fieldnames=headers)
-                    writer.writeheader()
-                    writer.writerows(master_data_from_all_pdfs)
-                print(f"Successfully wrote all data to {combined_csv_output_file}")
-            except IOError as e:
-                print(f"IOError writing combined CSV: {e}")
+        # --- Step 3.1: AI Customs Code Assignment ---
+        if all_items_for_invoice and all_customs_codes_map:
+            print(f"\\nAssigning customs codes for {len(all_items_for_invoice)} extracted items from invoice {invoice_id_for_filename}...")
+            for item_row in all_items_for_invoice:
+                # Skip if item is a placeholder for a failed page or has no name
+                if "PAGE ANALYSIS FAILED" in item_row.get("Item Name", "") or not item_row.get("Item Name"):
+                    continue
+
+                item_details_for_ai = prepare_item_details_for_ai(item_row)
+                if not item_details_for_ai or item_details_for_ai == "Item details are insufficient for AI processing.":
+                    print(f"Skipping customs code assignment for item '{item_row.get('Item Name', 'Unknown Item')}' due to insufficient details.")
+                    continue
+                
+                # print(f"DEBUG: Item details for AI (customs): {item_details_for_ai}")
+                assigned_code, assigned_description = assign_customs_code_with_ai(
+                    item_details_for_ai, 
+                    all_customs_codes_map,
+                    genai_model_instance=customs_model # Pass the initialized model
+                )
+                if assigned_code and assigned_code != "ERROR_NO_CODE_ASSIGNED":
+                    item_row["Colný kód"] = assigned_code
+                    item_row["Popis colného kódu"] = assigned_description # This comes from all_customs_codes_map now
+                    print(f"Assigned customs code {assigned_code} to item: {item_row.get('Item Name', 'Unknown Item')}")
+                else:
+                    print(f"Failed to assign customs code for item: {item_row.get('Item Name', 'Unknown Item')}")
+                    # Keep existing or empty if no update
+        elif not all_customs_codes_map:
+            print("Customs tariff codes map is empty. Skipping AI customs code assignment.")
+        
+        print(f"DEBUG: All items for invoice {invoice_id_for_filename} after customs assignment: {all_items_for_invoice}")
+
+
+        # --- Step 3.2: Ask for Target Gross and Net Weights for the current invoice ---
+        # Only ask if there are items to process for this invoice
+        if not all_items_for_invoice or all( "PAGE ANALYSIS FAILED" in item.get("Item Name","") for item in all_items_for_invoice ):
+            print(f"No valid items extracted for invoice {invoice_id_for_filename} from {pdf_file}. Skipping weight input and adjustment.")
         else:
-            print("\\nNo data was extracted from any PDF to write to the combined CSV file.")
-            # Optionally, create an empty CSV with headers
-            headers = ["Invoice Number", "Page Number", "Row Number", "Item Name", "description", "Location", "Quantity", "Unit Price", "Total Price", "Total Net Weight", "Colný kód", "Popis colného kódu"]
-            try:
-                with open(combined_csv_output_file, 'w', newline='', encoding='utf-8') as csvfile:
-                    writer = csv.DictWriter(csvfile, fieldnames=headers)
-                    writer.writeheader()
-                    writer.writerow({
-                        "Invoice Number": "NO DATA", "Page Number": "", "Row Number": "",
-                        "Item Name": "No data extracted from any PDF files.", 
-                        "description": "",
-                        "Location": "", "Quantity": "", "Unit Price": "", "Total Price": "", "Total Net Weight": "",
-                        "Colný kód": "",
-                        "Popis colného kódu": ""
-                    })
-                print(f"Created an empty placeholder CSV: {combined_csv_output_file}")
-            except IOError as e:
-                print(f"IOError creating empty placeholder CSV: {e}")
+            print(f"\\n--- Weight Input for Invoice: {invoice_id_for_filename} (from {pdf_file}) ---")
+            target_total_gross_kg = None
+            target_total_net_kg = None
+            while target_total_gross_kg is None:
+                try:
+                    target_total_gross_kg_str = input(f"Enter TARGET TOTAL GROSS weight (kg) for invoice {invoice_id_for_filename} (e.g., 150.5): ")
+                    target_total_gross_kg = float(target_total_gross_kg_str)
+                except ValueError:
+                    print("Invalid input. Please enter a numeric value for gross weight.")
+            
+            while target_total_net_kg is None:
+                try:
+                    target_total_net_kg_str = input(f"Enter TARGET TOTAL NET weight (kg) for invoice {invoice_id_for_filename} (e.g., 140.2): ")
+                    target_total_net_kg = float(target_total_net_kg_str)
+                except ValueError:
+                    print("Invalid input. Please enter a numeric value for net weight.")
 
-    print("\\n--- Script Finished ---")
+            print(f"Target weights for {invoice_id_for_filename}: Gross={target_total_gross_kg} kg, Net={target_total_net_kg} kg")
+
+            # --- Step 3.3: AI Weight Adjustment ---
+            # Calculate the sum of "Preliminary Net Weight" for the current invoice
+            calculated_preliminary_total_net_kg = 0
+            valid_items_for_weight_adjustment = []
+            for item_row in all_items_for_invoice:
+                if "PAGE ANALYSIS FAILED" in item_row.get("Item Name", ""): # Skip failed pages
+                    continue
+                prelim_weight = item_row.get("Preliminary Net Weight")
+                if isinstance(prelim_weight, (int, float)):
+                    calculated_preliminary_total_net_kg += prelim_weight
+                valid_items_for_weight_adjustment.append(item_row) # only include processable items
+            
+            print(f"Calculated Preliminary Total Net Weight for {invoice_id_for_filename} (from {len(valid_items_for_weight_adjustment)} items): {calculated_preliminary_total_net_kg:.3f} kg")
+
+
+            if (calculated_preliminary_total_net_kg > 0 or any(item.get("Quantity") for item in valid_items_for_weight_adjustment)) and valid_items_for_weight_adjustment:
+                print(f"Adjusting weights for {len(valid_items_for_weight_adjustment)} items in invoice {invoice_id_for_filename} using AI...")
+                # Note: adjust_item_weights_to_target_totals_with_ai is expected to modify items_data_list in-place
+                # or return a new list. The current implementation in snippets seems to modify in-place
+                # and also return a structure. Let's adapt to ensure 'all_items_for_invoice' is correctly updated.
+                
+                # Make a deep copy if the adjustment function doesn't handle it or if you want to compare
+                # For now, passing the sub-list of valid items
+                adjustment_result = adjust_item_weights_to_target_totals_with_ai(
+                    items_data_list=valid_items_for_weight_adjustment, # Pass only valid items
+                    target_total_net_kg=target_total_net_kg,
+                    target_total_gross_kg=target_total_gross_kg,
+                    calculated_preliminary_total_net_kg=calculated_preliminary_total_net_kg,
+                    genai_model_instance=weight_adjustment_model
+                )
+
+                # The AI function might return the modified list directly or a dict containing it
+                # Based on previous structure, it might be a dict with an "items" key or just the list.
+                # Or it might modify in-place. Let's assume it returns the list of adjusted valid items.
+                
+                if isinstance(adjustment_result, list):
+                    # Need to merge these changes back into all_items_for_invoice
+                    # This assumes adjustment_result contains the same items as valid_items_for_weight_adjustment
+                    # but with updated weights.
+                    # A robust way is to map by a unique key if available, or by index if order is preserved.
+                    # For simplicity, if lengths match, we assume order is preserved.
+                    if len(adjustment_result) == len(valid_items_for_weight_adjustment):
+                        for original_item, adjusted_item_data in zip(valid_items_for_weight_adjustment, adjustment_result):
+                            original_item.update(adjusted_item_data) # Update the original item in the sublist
+                        print(f"Successfully applied AI weight adjustments for invoice {invoice_id_for_filename}.")
+                    else:
+                         print(f"AI weight adjustment returned a list of different length for {invoice_id_for_filename}. Manual check needed. Updates not fully applied.")
+                elif isinstance(adjustment_result, dict) and "error" in adjustment_result:
+                    print(f"Error during AI weight adjustment for {invoice_id_for_filename}: {adjustment_result['error']}. Using data before adjustment.")
+                elif isinstance(adjustment_result, dict) and "items" in adjustment_result and isinstance(adjustment_result["items"], list):
+                    # Similar merging logic as above if it returns a dict with "items"
+                    adjusted_items_list_from_dict = adjustment_result["items"]
+                    if len(adjusted_items_list_from_dict) == len(valid_items_for_weight_adjustment):
+                        for original_item, adjusted_item_data in zip(valid_items_for_weight_adjustment, adjusted_items_list_from_dict):
+                            original_item.update(adjusted_item_data)
+                        print(f"Successfully applied AI weight adjustments for invoice {invoice_id_for_filename} (from dict).")
+                    else:
+                        print(f"AI weight adjustment (from dict) returned a list of different length for {invoice_id_for_filename}. Updates not fully applied.")
+                else:
+                    print(f"AI weight adjustment for {invoice_id_for_filename} returned an unexpected result or modified in-place. Review data. Result: {type(adjustment_result)}")
+                    # If it modified in-place, valid_items_for_weight_adjustment (and thus items in all_items_for_invoice) are already updated.
+
+            else:
+                print(f"Skipping AI weight adjustment for {invoice_id_for_filename} as there are no valid items with preliminary weights or quantities.")
+                # Populate Total Net/Gross as N/A or based on preliminary if no adjustment
+                for item_row in all_items_for_invoice:
+                    if "PAGE ANALYSIS FAILED" in item_row.get("Item Name", ""): continue
+                    item_row.setdefault("Total Net Weight", item_row.get("Preliminary Net Weight", "N/A"))
+                    item_row.setdefault("Total Gross Weight", "N/A")
+
+        # --- Step 4: Write to CSV ---
+        # Ensure all items (including failed pages) are written to the CSV for completeness.
+        if all_items_for_invoice:
+            safe_invoice_id = re.sub(r'[\\\\/*?:\"<>|]', "_", str(invoice_id_for_filename))
+            safe_invoice_id = safe_invoice_id if safe_invoice_id else f"UNKNOWN_INVOICE_{os.path.splitext(pdf_file)[0]}"
+            
+            output_csv_filename = os.path.join(OUTPUT_CSV_DIR, f"processed_invoice_data_{safe_invoice_id}.csv")
+            
+            headers = [
+                "Page Number", "Invoice Number", "Item Name", "description", "Location", 
+                "Quantity", "Unit Price", "Total Price", 
+                "Preliminary Net Weight", "Total Net Weight", "Total Gross Weight",
+                "Colný kód", "Popis colného kódu"
+            ]
+
+            try:
+                with open(output_csv_filename, 'w', newline='', encoding='utf-8-sig') as csvfile:
+                    writer = csv.DictWriter(csvfile, fieldnames=headers, delimiter=';')
+                    writer.writeheader()
+                    # Ensure all dictionaries have all header keys to prevent DictWriter errors
+                    processed_rows_for_csv = []
+                    for item_dict in all_items_for_invoice:
+                        row = {header: item_dict.get(header, "") for header in headers}
+                        processed_rows_for_csv.append(row)
+                    writer.writerows(processed_rows_for_csv)
+                print(f"Successfully wrote processed data for invoice '{invoice_id_for_filename}' to '{output_csv_filename}'")
+
+                # Move the processed PDF to processed_invoices directory
+                source_pdf_path = os.path.join(INPUT_PDF_DIR, pdf_file) # pdf_file is just the filename
+                destination_pdf_path = os.path.join(PROCESSED_PDF_DIR, pdf_file)
+                try:
+                    shutil.move(source_pdf_path, destination_pdf_path)
+                    print(f"Successfully moved processed PDF '{pdf_file}' to '{PROCESSED_PDF_DIR}'")
+                except Exception as e:
+                    print(f"Error moving PDF '{pdf_file}' to '{PROCESSED_PDF_DIR}': {e}. Source: {source_pdf_path}, Dest: {destination_pdf_path}")
+
+            except IOError as e:
+                print(f"IOError writing CSV for invoice '{invoice_id_for_filename}' to '{output_csv_filename}': {e}")
+            except Exception as e:
+                print(f"Unexpected error writing CSV for invoice '{invoice_id_for_filename}' to '{output_csv_filename}': {e}")
+        else:
+            print(f"No items to write to CSV for invoice from PDF: {pdf_file}")
+
+        # Clean up images for the current PDF
+        if image_paths_current_pdf:
+            print(f"Cleaning up {len(image_paths_current_pdf)} image(s) for {pdf_file}...")
+            for image_path_to_delete in image_paths_current_pdf:
+                try:
+                    os.remove(image_path_to_delete)
+                except OSError as e:
+                    print(f"Warning: Could not delete image {image_path_to_delete}: {e}")
+
+    # For now, we'll let it try to proceed, but AI features will fail.
+    # return # Uncomment to exit if API key is critical for all operations
+
+    # Initialize the GenerativeModel instance (optional, can be done in functions)
+    # genai.configure(api_key=GOOGLE_API_KEY) # This is now done before model init
+    # model = genai.GenerativeModel(MODEL_NAME) # Moved into functions that use it or checked before use
+
+    # --- Main Menu ---
+    while True:
+        print("\\n--- Intrastat Helper Main Menu ---")
+        print("1. Spracovať nové PDF faktúry (Process new PDF invoices)")
+        print("2. Generovať súhrnný report z CSV súborov (Generate summary report from CSV files)")
+        print("3. Zobraziť colné kódy (View customs codes)")
+        print("4. Exit")
+        choice = input("Čo chcete urobiť? (What do you want to do? Enter 1-4): ").strip()
+
+        if choice == '1':
+            # Configure API key here before calling functions that might use the model
+            if GOOGLE_API_KEY:
+                genai.configure(api_key=GOOGLE_API_KEY)
+                print("Google API Key configured for AI processing.")
+            else:
+                print("Warning: GOOGLE_API_KEY not found. AI-dependent features in PDF processing may not work.")
+            
+            # Ask for processing mode
+            while True:
+                mode_choice = input("Chcete spracovať všetky faktúry alebo jednotlivo? (vsetky/jednotlivo): ").strip().lower()
+                if mode_choice in ["vsetky", "jednotlivo"]:
+                    run_pdf_processing_flow(processing_mode=mode_choice)
+                    break
+                else:
+                    print("Neplatná voľba. Zadajte 'vsetky' alebo 'jednotlivo'. (Invalid choice. Enter 'vsetky' or 'jednotlivo'.)")
+        
+        elif choice == '2':
+            # Call prompt_and_generate_report without specific paths to list all CSVs in data_output
+            prompt_and_generate_report(available_csvs_paths=None)
+        elif choice == '3':
+            # Call list_csv_files to display all available CSVs
+            list_csv_files(REPORT_INPUT_DIR)
+        elif choice == '4':
+            print("Program sa ukončuje.")
+            break
+        else:
+            print("Neplatná voľba, skúste znova.")
+
+def main():
+    while True:
+        print("\nVyberte akciu:")
+        print("1. Spracovať nové PDF faktúry")
+        print("2. Generovať report z existujúcich CSV súborov")
+        print("3. Ukončiť")
+        
+        user_choice = input("Zadajte vašu voľbu (1-3): ").strip()
+        
+        if user_choice == '1':
+            run_pdf_processing_flow()
+            # The prompt_and_generate_report for newly processed files is already inside run_pdf_processing_flow
+        elif user_choice == '2':
+            # Call prompt_and_generate_report without specific paths to list all CSVs in data_output
+            prompt_and_generate_report(available_csvs_paths=None)
+        elif user_choice == '3':
+            print("Program sa ukončuje.")
+            break
+        else:
+            print("Neplatná voľba, skúste znova.")
 
 if __name__ == "__main__":
-    # Check for GOOGLE_API_KEY existence before running main
-    # The configuration now happens inside main() to print messages appropriately.
-    # This top-level check is a good pre-flight.
-    if not os.getenv("GOOGLE_API_KEY"):
-        print("CRITICAL: GOOGLE_API_KEY is not set in the environment or .env file.")
-        print("Please ensure your .env file is correctly set up with GOOGLE_API_KEY=your_key_here")
-    else:
-        print("GOOGLE_API_KEY found in environment. Proceeding with main execution.")
-    
-    main()
+    # Ensure GOOGLE_API_KEY is set
+    GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
+    if not GOOGLE_API_KEY:
+        print("Error: The GOOGLE_API_KEY environment variable is not set.")
+        print("Please ensure you have a .env file in the project root with GOOGLE_API_KEY=YOUR_API_KEY")
+        print("Or set the environment variable in your system.")
+        # Exit if key is critical, otherwise AI features will fail
+        # exit(1) 
 
-    print("\\nPlease note: The accuracy of the extraction depends on the AI's ability to understand the document image and follow JSON instructions.")
-    print("Review the CSV and the raw Gemini responses printed in the console for any discrepancies.")
-    print("If parsing fails, check the 'Raw Gemini response' logs and JSONDecodeError messages.")
+    # Primary menu loop (this is the loop that should be active)
+    while True:
+        print("\\n--- Intrastat Helper Main Menu ---")
+        print("1. Spracovať nové PDF faktúry (Process new PDF invoices)")
+        print("2. Generovať súhrnný report z CSV súborov (Generate summary report from CSV files)")
+        print("3. Zobraziť colné kódy (View customs codes)")
+        print("4. Exit")
+        choice = input("Čo chcete urobiť? (What do you want to do? Enter 1-4): ").strip()
+
+        if choice == '1':
+            if GOOGLE_API_KEY:
+                genai.configure(api_key=GOOGLE_API_KEY)
+                print("Google API Key configured for AI processing.")
+            else:
+                print("Warning: GOOGLE_API_KEY not found. AI-dependent features in PDF processing may not work.")
+            run_pdf_processing_flow()
+        
+        elif choice == '2':
+            prompt_and_generate_report(available_csvs_paths=None)
+        
+        elif choice == '3': 
+            customs_data = load_customs_tariff_codes() # Assuming this function is defined elsewhere
+            if customs_data:
+                print("\\n--- Dostupné Colné Kódy ---")
+                for code, description in customs_data.items():
+                    print(f"Kód: {code} - Popis: {description}")
+                print("---------------------------")
+            else:
+                print("Colné kódy sa nepodarilo načítať alebo nie sú dostupné.")
+        
+        elif choice == '4':
+            print("Program sa ukončuje.")
+            break
+        else:
+            print("Neplatná voľba, skúste znova.")
+    
+    # main() # This call should be commented out or removed
+    # ... (any other concluding comments) ...
