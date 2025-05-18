@@ -1,11 +1,21 @@
 import pandas as pd
 import os
 import re
+import shutil # Added for moving files
 
 # Define the directory for input CSVs (outputs from main.py) and output reports
 INPUT_DIR = "data_output"
 OUTPUT_DIR = "dovozy" # Or a new directory like "reports" if preferred
 DATA_DIR = "data" # For col_sadz.csv
+# Directory for archiving processed CSV and META files from data_output after report generation
+DATA_OUTPUT_ARCHIV_DIR = "data_output_archiv/"
+
+# Directory where main.py moves PDFs after creating their CSV in data_output
+# This is now the final directory for PDFs whose data has been reported.
+SOURCE_PROCESSED_PDF_DIR = "spracovane_faktury/"
+# ARCHIV_FAKTUR_S_REPORTOM_DIR is no longer needed as per user request.
+# # New directory for PDFs after a report has been generated from their data
+# ARCHIV_FAKTUR_S_REPORTOM_DIR = "archiv_faktur_s_reportom/"
 
 def list_csv_files(directory):
     """Lists CSV files in the specified directory."""
@@ -238,6 +248,83 @@ def generate_single_report(input_csv_path, output_csv_name, df_sadz):
         print(f"Report successfully generated: {output_path}")
     except Exception as e:
         print(f"Error writing report to {output_path}: {e}")
+        return # Return early if report writing fails, so we don't attempt to move PDF or delete files
+
+    # After successfully generating the report, try to archive the original PDF
+    # input_csv_path is the path to the CSV in data_output, e.g., "data_output/processed_invoice_XY.csv"
+    try:
+        # This function now logs the status of the PDF in SOURCE_PROCESSED_PDF_DIR
+        log_final_pdf_status(input_csv_path, SOURCE_PROCESSED_PDF_DIR)
+    except Exception as e:
+        # Log an error if logging status fails, but don't let it crash the report generation flow
+        print(f"Chyba počas zaznamenávania stavu pôvodného PDF súvisiaceho s {input_csv_path}: {e}")
+    
+    # Regardless of PDF archiving outcome (it might have been archived previously, or meta missing),
+    # if the report was successfully generated, we should clean up the source CSV and its .meta file from data_output.
+    meta_filepath_to_delete = input_csv_path + ".meta"
+    # Delete the .meta file
+    if os.path.exists(meta_filepath_to_delete):
+        try:
+            # Ensure archive directory exists
+            os.makedirs(DATA_OUTPUT_ARCHIV_DIR, exist_ok=True)
+            # Move .meta file to archive
+            shutil.move(meta_filepath_to_delete, os.path.join(DATA_OUTPUT_ARCHIV_DIR, os.path.basename(meta_filepath_to_delete)))
+            print(f"Úspešne archivovaný meta súbor: {os.path.join(DATA_OUTPUT_ARCHIV_DIR, os.path.basename(meta_filepath_to_delete))}")
+        except Exception as e:
+            print(f"Chyba pri archivácii meta súboru {meta_filepath_to_delete} do {DATA_OUTPUT_ARCHIV_DIR}: {e}")
+    else:
+        # This is not an error for cleanup, meta might not exist if PDF was processed by older main.py version
+        print(f"Poznámka: Meta súbor {meta_filepath_to_delete} nebol nájdený na archiváciu (môže byť v poriadku).")
+
+    # Delete the processed data CSV file from data_output
+    if os.path.exists(input_csv_path):
+        try:
+            # Ensure archive directory exists (might be redundant if already created for .meta, but safe)
+            os.makedirs(DATA_OUTPUT_ARCHIV_DIR, exist_ok=True)
+            # Move .csv file to archive
+            shutil.move(input_csv_path, os.path.join(DATA_OUTPUT_ARCHIV_DIR, os.path.basename(input_csv_path)))
+            print(f"Úspešne archivovaný spracovaný CSV súbor: {os.path.join(DATA_OUTPUT_ARCHIV_DIR, os.path.basename(input_csv_path))}")
+        except Exception as e:
+            print(f"Chyba pri archivácii spracovaného CSV súboru {input_csv_path} do {DATA_OUTPUT_ARCHIV_DIR}: {e}")
+    else:
+        # This case should ideally not happen if we just processed it, but good to note.
+        print(f"Varovanie: Spracovaný CSV súbor {input_csv_path} nebol nájdený na archiváciu.")
+
+
+def log_final_pdf_status(processed_data_csv_path, source_pdf_dir):
+    """Reads a .meta file associated with processed_data_csv_path to find the original
+    PDF filename and logs that the PDF in source_pdf_dir is now considered reported.
+    It no longer moves the PDF.
+    """
+    meta_filepath = processed_data_csv_path + ".meta"
+
+    if not os.path.exists(meta_filepath):
+        print(f"Varovanie: Meta súbor {meta_filepath} nebol nájdený. Stav pôvodného PDF nemôže byť potvrdený.")
+        return
+
+    original_pdf_filename = ""
+    try:
+        with open(meta_filepath, 'r', encoding='utf-8') as mf:
+            original_pdf_filename = mf.read().strip()
+    except Exception as e:
+        print(f"Chyba pri čítaní meta súboru {meta_filepath}: {e}. Stav pôvodného PDF nemôže byť potvrdený.")
+        return
+
+    if not original_pdf_filename:
+        print(f"Varovanie: Meta súbor {meta_filepath} je prázdny. Stav pôvodného PDF nemôže byť potvrdený.")
+        return
+
+    source_pdf_full_path = os.path.join(source_pdf_dir, original_pdf_filename)
+
+    if not os.path.exists(source_pdf_full_path):
+        print(f"Varovanie: Pôvodný PDF súbor '{original_pdf_filename}' (uvedený v {meta_filepath}) nebol nájdený v adresári {source_pdf_dir}. Mohol byť presunutý alebo nespracovaný správne.")
+    else:
+        print(f"Potvrdenie: Dáta z PDF súboru '{original_pdf_filename}' (v '{source_pdf_dir}') boli použité na generovanie reportu.")
+
+    # Deletion of .meta and .csv is handled in generate_single_report after this function call.
+
+    # except Exception as e:
+    #     print(f"Chyba pri presúvaní PDF súboru '{original_pdf_filename}' z '{source_pdf_dir}' do '{archive_pdf_dir}': {e}")
 
 
 def main():

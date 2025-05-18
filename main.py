@@ -1261,6 +1261,17 @@ Specific instructions for extraction:
                     writer.writerows(processed_rows_for_csv)
                 print(f"Úspešne zapísané spracované dáta pre faktúru '{invoice_id_for_filename}' do '{output_csv_filename}'") # Changed
 
+                # Create a .meta file with the original PDF filename
+                # pdf_file is the basename of the original PDF, e.g., "Invoice 123.pdf"
+                # output_csv_filename is the full path to the CSV, e.g., "data_output/processed_invoice_data_Invoice_123.csv"
+                meta_filepath = output_csv_filename + ".meta"
+                try:
+                    with open(meta_filepath, 'w', encoding='utf-8') as mf:
+                        mf.write(pdf_file) # pdf_file is the basename like "My Original Invoice.pdf"
+                    print(f"Úspešne vytvorený meta súbor: {meta_filepath}")
+                except Exception as e:
+                    print(f"CHYBA pri vytváraní meta súboru {meta_filepath}: {e}")
+
                 # Move the processed PDF to processed_invoices directory
                 source_pdf_path = os.path.join(INPUT_PDF_DIR, pdf_file) # pdf_file is just the filename
                 destination_pdf_path = os.path.join(PROCESSED_PDF_DIR, pdf_file)
