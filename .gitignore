@@ -126,8 +126,10 @@ data/
 .env
 
 # Directories for invoice files
-processed_invoices/
-invoices/
+#processed_invoices/
+#invoices/
+spracovane_faktury/
+faktury_na_spracovanie/
 dovozy/
 
 # Directory for generated CSV output

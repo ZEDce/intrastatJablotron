@@ -36,10 +36,10 @@ MODEL_NAME = "gemini-2.0-flash-lite"
 CUSTOMS_ASSIGNMENT_MODEL_NAME = "gemini-2.0-flash-lite"
 # PACKAGING_WEIGHT_PER_UNIT_KG = 0.050 # Removed: User will provide target gross weight
 
-INPUT_PDF_DIR = "invoices/" # Define input directory for PDFs
+INPUT_PDF_DIR = "faktury_na_spracovanie/" # Define input directory for PDFs
 OUTPUT_CSV_DIR = "data_output/" # Define output directory for CSVs
 PDF_IMAGE_DIR = "pdf_images/" # Define directory for images extracted from PDFs
-PROCESSED_PDF_DIR = "processed_invoices/" # Define directory for processed PDFs
+PROCESSED_PDF_DIR = "spracovane_faktury/" # Define directory for processed PDFs
 
 def load_product_weights(file_path="data/product_weight.csv"):
     """
