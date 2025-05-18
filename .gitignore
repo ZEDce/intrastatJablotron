@@ -2,6 +2,7 @@
 __pycache__/
 *.py[cod]
 *$py.class
+*.pyd
 
 # C extensions
 *.so
@@ -116,23 +117,21 @@ dmypy.json
 # Pyre type checker
 .pyre/
 
-# Project-specific
+# OS specific files
+.DS_Store
+Thumbs.db
+
+# IDE specific files
+.vscode/
+.idea/
+
+# Project-specific output/data folders
 pdf_images/
 data_output/
-*.DS_Store
-
-# Environment variables
-.env
-
-# Directories for invoice files
-#processed_invoices/
-#invoices/
 spracovane_faktury/
 faktury_na_spracovanie/
 dovozy/
-
-# Directory for generated CSV output
-data_output/
+# data_output_archiv/
 
 # Python virtual environment
 venv/
@@ -141,10 +140,5 @@ __pycache__/
 *.pyo
 *.pyd
 
-# IDE specific files
-.vscode/
-.idea/
-
-# OS specific files
-.DS_Store
-Thumbs.db 
+# Note: .env, __pycache__, venv, etc. are covered above
+# *.pyc, *.pyo are covered by *.py[cod] 

@@ -1,45 +1,25 @@
 import fitz  # PyMuPDF
 import google.generativeai as genai
-# We might not need a separate import for types if we construct the part as a dict
-# import google.generativeai.types as genai_types 
 import os
-# PIL is no longer strictly needed in analyze_image_with_gemini if we send bytes,
-# but it's good to keep for other potential image manipulations or if we revert.
-# from PIL import Image 
 import io
-from dotenv import load_dotenv # Added for .env support
-import csv # Added for CSV output
-import re # For regular expression based text parsing
-import json # Added for JSON parsing
-import glob # Added to find all PDF files
-import shutil # Added for moving files
+from dotenv import load_dotenv 
+import csv 
+import re 
+import json 
+import glob 
+import shutil 
 
-# Import functions from report.py
 from report import list_csv_files, get_customs_code_descriptions, generate_single_report, INPUT_DIR as REPORT_INPUT_DIR, prompt_and_generate_report
 
-
-# Load environment variables from .env file
 load_dotenv()
 
-# --- DEBUGGING ---
-# print(f"DEBUG: GOOGLE_API_KEY from env after load_dotenv: {os.getenv('GOOGLE_API_KEY')}")
-# --- END DEBUGGING ---
-
-# Configure the Gemini API key (loaded from environment)
-# This is now handled in the __main__ block after checking if the key exists.
-
-# --- Model Configuration ---
-# Using gemini-1.5-flash-latest as a stable and capable model for this task.
-# The user's log showed "gemini-2.5-flash-preview-04-17", we can switch back if needed,
-# but 1.5-flash is generally recommended for cost/performance balance.
 MODEL_NAME = "gemini-2.0-flash-lite"
 CUSTOMS_ASSIGNMENT_MODEL_NAME = "gemini-2.0-flash-lite"
-# PACKAGING_WEIGHT_PER_UNIT_KG = 0.050 # Removed: User will provide target gross weight
 
-INPUT_PDF_DIR = "faktury_na_spracovanie/" # Define input directory for PDFs
-OUTPUT_CSV_DIR = "data_output/" # Define output directory for CSVs
-PDF_IMAGE_DIR = "pdf_images/" # Define directory for images extracted from PDFs
-PROCESSED_PDF_DIR = "spracovane_faktury/" # Define directory for processed PDFs
+INPUT_PDF_DIR = "faktury_na_spracovanie/" 
+OUTPUT_CSV_DIR = "data_output/" 
+PDF_IMAGE_DIR = "pdf_images/" 
+PROCESSED_PDF_DIR = "spracovane_faktury/" 
 
 def load_product_weights(file_path="data/product_weight.csv"):
     """
@@ -49,33 +29,32 @@ def load_product_weights(file_path="data/product_weight.csv"):
     """
     weights = {}
     try:
-        with open(file_path, mode='r', encoding='utf-8-sig') as csvfile: # Changed to utf-8-sig
+        with open(file_path, mode='r', encoding='utf-8-sig') as csvfile: 
             reader = csv.reader(csvfile, delimiter=';')
-            header = next(reader) # Skip header row
+            header = next(reader) 
             if header != ["Registrační číslo", "JV Váha komplet SK"]:
-                print(f"VAROVANIE: Neočakávaná hlavička v súbore {file_path}: {header}. Pokračuje sa s opatrnosťou.") # Translated
+                print(f"VAROVANIE: Neočakávaná hlavička v súbore {file_path}: {header}. Pokračuje sa s opatrnosťou.") 
 
-            for row_num, row in enumerate(reader, 2): # Start row_num from 2 for messages
+            for row_num, row in enumerate(reader, 2): 
                 if len(row) == 2:
                     item_code = row[0].strip()
                     weight_str = row[1].strip().replace(',', '.')
-                    if item_code and weight_str: # Ensure neither is empty
+                    if item_code and weight_str: 
                         try:
                             weights[item_code] = float(weight_str)
                         except ValueError:
-                            print(f"VAROVANIE: Nepodarilo sa konvertovať hmotnosť '{row[1]}' na číslo pre kód položky '{item_code}' v súbore {file_path} na riadku {row_num}. Táto položka sa preskakuje.") # Translated
+                            print(f"VAROVANIE: Nepodarilo sa konvertovať hmotnosť '{row[1]}' na číslo pre kód položky '{item_code}' v súbore {file_path} na riadku {row_num}. Táto položka sa preskakuje.") 
                     else:
-                        if not item_code : print(f"VAROVANIE: Chýbajúci kód položky v súbore {file_path} na riadku {row_num}. Tento riadok sa preskakuje.") # Translated
-                        if not weight_str and item_code : print(f"VAROVANIE: Chýbajúca hmotnosť pre kód položky '{item_code}' v súbore {file_path} na riadku {row_num}. Táto položka sa preskakuje.") # Translated
-                elif row: # If row is not empty but doesn't have 2 columns
-                    print(f"VAROVANIE: Preskakuje sa nesprávne formátovaný riadok (očakávané 2 stĺpce, nájdené {len(row)}) v súbore {file_path} na riadku {row_num}: {row}") # Translated
-        # print(f"Successfully loaded {len(weights)} product weights from {file_path}") # Removed
+                        if not item_code : print(f"VAROVANIE: Chýbajúci kód položky v súbore {file_path} na riadku {row_num}. Tento riadok sa preskakuje.") 
+                        if not weight_str and item_code : print(f"VAROVANIE: Chýbajúca hmotnosť pre kód položky '{item_code}' v súbore {file_path} na riadku {row_num}. Táto položka sa preskakuje.") 
+                elif row: 
+                    print(f"VAROVANIE: Preskakuje sa nesprávne formátovaný riadok (očakávané 2 stĺpce, nájdené {len(row)}) v súbore {file_path} na riadku {row_num}: {row}") 
         return weights
     except FileNotFoundError:
-        print(f"CHYBA: Súbor s hmotnosťami produktov nebol nájdený na ceste: {file_path}. Výpočet čistej hmotnosti bude preskočený.") # Translated
+        print(f"CHYBA: Súbor s hmotnosťami produktov nebol nájdený na ceste: {file_path}. Výpočet čistej hmotnosti bude preskočený.") 
         return {}
     except Exception as e:
-        print(f"CHYBA pri načítaní produktových hmotností zo súboru {file_path}: {e}") # Translated
+        print(f"CHYBA pri načítaní produktových hmotností zo súboru {file_path}: {e}") 
         return {}
 
 def load_customs_tariff_codes(file_path="data/col_sadz.csv"):
@@ -83,44 +62,39 @@ def load_customs_tariff_codes(file_path="data/col_sadz.csv"):
     Loads customs tariff codes and their descriptions from a CSV file.
     Assumes CSV format: col_sadz;Popis
     """
-    # print(f"DEBUG: Attempting to load customs codes from: {file_path}") # New debug print # Removed
     customs_codes = {}
     try:
-        with open(file_path, mode='r', encoding='utf-8-sig') as csvfile: # Changed to utf-8-sig to handle BOM
+        with open(file_path, mode='r', encoding='utf-8-sig') as csvfile: 
             reader = csv.reader(csvfile, delimiter=';')
-            header = next(reader) # Skip header row
+            header = next(reader) 
             expected_header = ["col_sadz", "Popis"]
-            # Normalize header for comparison (e.g., remove BOM if not handled by utf-8-sig)
             normalized_header = [h.lstrip('\ufeff') for h in header]
 
             if normalized_header != expected_header:
-                print(f"VAROVANIE: Neočakávaná hlavička v súbore {file_path}: {header} (normalizovaná: {normalized_header}). Očakávaná {expected_header}. Pokračuje sa s opatrnosťou.") # Translated
+                print(f"VAROVANIE: Neočakávaná hlavička v súbore {file_path}: {header} (normalizovaná: {normalized_header}). Očakávaná {expected_header}. Pokračuje sa s opatrnosťou.") 
 
-            for row_num, row in enumerate(reader, 2): # Start row_num from 2 for messages
+            for row_num, row in enumerate(reader, 2): 
                 if len(row) == 2:
                     code_raw = row[0].strip()
                     description = row[1].strip()
-                    code = code_raw.replace(" ", "") # Normalize code by removing spaces
+                    code = code_raw.replace(" ", "") 
                     
-                    if code and description: # Ensure neither is empty
+                    if code and description: 
                         if not re.fullmatch(r"[0-9]+", code):
-                            print(f"VAROVANIE: Neplatné znaky v colnom kóde '{code_raw}' (normalizovaný na '{code}') v súbore {file_path} na riadku {row_num}. Očakávané sú iba číslice. Táto položka sa preskakuje.") # Translated
+                            print(f"VAROVANIE: Neplatné znaky v colnom kóde '{code_raw}' (normalizovaný na '{code}') v súbore {file_path} na riadku {row_num}. Očakávané sú iba číslice. Táto položka sa preskakuje.") 
                             continue
                         customs_codes[code] = description
                     else:
-                        if not code_raw: print(f"VAROVANIE: Chýbajúci col_sadz v súbore {file_path} na riadku {row_num}. Tento riadok sa preskakuje.") # Translated
-                        # Check original code_raw for missing description message
-                        if not description and code_raw: print(f"VAROVANIE: Chýbajúci Popis pre col_sadz '{code_raw}' v súbore {file_path} na riadku {row_num}. Táto položka sa preskakuje.") # Translated
-                elif row: # If row is not empty but doesn't have 2 columns
-                    print(f"VAROVANIE: Preskakuje sa nesprávne formátovaný riadok (očakávané 2 stĺpce, nájdené {len(row)}) v súbore {file_path} na riadku {row_num}: {row}") # Translated
-        # print(f"Successfully loaded {len(customs_codes)} customs tariff codes from {file_path}") # Removed
-        # print(f"DEBUG: Loaded customs codes map: {customs_codes}") # Uncommented for debugging # Removed
+                        if not code_raw: print(f"VAROVANIE: Chýbajúci col_sadz v súbore {file_path} na riadku {row_num}. Tento riadok sa preskakuje.") 
+                        if not description and code_raw: print(f"VAROVANIE: Chýbajúci Popis pre col_sadz '{code_raw}' v súbore {file_path} na riadku {row_num}. Táto položka sa preskakuje.") 
+                elif row: 
+                    print(f"VAROVANIE: Preskakuje sa nesprávne formátovaný riadok (očakávané 2 stĺpce, nájdené {len(row)}) v súbore {file_path} na riadku {row_num}: {row}") 
         return customs_codes
     except FileNotFoundError:
-        print(f"CHYBA: Súbor s colnými kódmi nebol nájdený na ceste: {file_path}. Priradenie colných kódov bude ovplyvnené.") # Translated
+        print(f"CHYBA: Súbor s colnými kódmi nebol nájdený na ceste: {file_path}. Priradenie colných kódov bude ovplyvnené.") 
         return {}
     except Exception as e:
-        print(f"CHYBA pri načítaní colných kódov zo súboru {file_path}: {type(e).__name__} - {e}") # Translated (added more specific error type)
+        print(f"CHYBA pri načítaní colných kódov zo súboru {file_path}: {type(e).__name__} - {e}") 
         return {}
 
 def pdf_to_images(pdf_path, output_folder="pdf_images"):
@@ -149,7 +123,7 @@ def pdf_to_images(pdf_path, output_folder="pdf_images"):
         doc.close()
         return image_paths
     except Exception as e:
-        print(f"CHYBA pri konverzii PDF '{pdf_path}' na obrázky: {e}") # Translated
+        print(f"CHYBA pri konverzii PDF '{pdf_path}' na obrázky: {e}") 
         return []
 
 def analyze_image_with_gemini(image_path, prompt):
@@ -190,17 +164,16 @@ def analyze_image_with_gemini(image_path, prompt):
                 parsed_json = json.loads(cleaned_json_text)
                 return parsed_json
             except json.JSONDecodeError as je:
-                print(f"CHYBA DEKÓDOVANIA JSON pre {image_path}: {je}. Surový text bol: '{cleaned_json_text}'") # Translated
-                return {"error": "Nepodarilo sa dekódovať JSON odpoveď", "details": str(je), "raw_text": raw_text_response} # Translated error message
+                print(f"CHYBA DEKÓDOVANIA JSON pre {image_path}: {je}. Surový text bol: '{cleaned_json_text}'") 
+                return {"error": "Nepodarilo sa dekódovať JSON odpoveď", "details": str(je), "raw_text": raw_text_response} 
         else:
-            print(f"VAROVANIE: Gemini API nevrátilo žiadny obsah alebo malo neočakávanú štruktúru pre {image_path}.") # Translated
+            print(f"VAROVANIE: Gemini API nevrátilo žiadny obsah alebo malo neočakávanú štruktúru pre {image_path}.") 
             if hasattr(response, 'prompt_feedback'):
-                print(f"Spätná väzba k promptu: {response.prompt_feedback}") # Translated
-            return {"error": "Gemini API nevrátilo žiadny obsah."} # Translated error message
+                print(f"Spätná väzba k promptu: {response.prompt_feedback}") 
+            return {"error": "Gemini API nevrátilo žiadny obsah."} 
 
     except Exception as e:
-        print(f"CHYBA pri analýze obrázka {image_path} pomocou Gemini: {e}") # Translated
-        # Add more detailed error logging if available
+        print(f"CHYBA pri analýze obrázka {image_path} pomocou Gemini: {e}") 
         error_detail = str(e)
         if hasattr(e, 'response') and hasattr(e.response, 'text'):
             error_detail += f" API Response Error: {e.response.text}"
@@ -254,7 +227,7 @@ def process_gemini_response_to_csv_rows(gemini_json_data, page_number, product_w
     items = gemini_json_data.get("items", [])
     
     if not items: # If items list is empty or not present
-        print(f"Strana {page_number}: V Gemini odpovedi pre faktúru {invoice_number} neboli nájdené žiadne položky.") # Translated
+        print(f"Strana {page_number}: V Gemini odpovedi pre faktúru {invoice_number} neboli nájdené žiadne položky.") 
         items_for_csv.append({
             "Page Number": page_number,
             "Invoice Number": invoice_number,
@@ -344,12 +317,6 @@ def process_gemini_response_to_csv_rows(gemini_json_data, page_number, product_w
                 # The user can always press Enter if country is not applicable.
                 is_product = True
         
-        # Original refinement logic - can be removed or commented out as new logic is more comprehensive
-        # if (raw_item_code is None or str(raw_item_code).lower() == "null" or str(raw_item_code).strip() == "" or str(raw_item_code).upper() == "N/A") and not is_product:
-        #      pass 
-        # elif (raw_item_code is None or str(raw_item_code).lower() == "null" or str(raw_item_code).strip() == "" or str(raw_item_code).upper() == "N/A") and is_product:
-        #      pass 
-
         processed_location_for_csv = "" # Default to empty string for CSV output
 
         if is_product:
@@ -528,13 +495,18 @@ def assign_customs_code_with_ai(item_details, all_customs_codes_map, genai_model
         "Tvojou úlohou je vybrať JEDEN najvhodnejší 8-miestny kód colného sadzobníka (col_sadz) pre túto položku. "
         "Ber na vedomie, že veľa produktov spoločnosti (rôzne typy detektorov, senzorov, čidiel, sirén, ústrední alarmov, klávesníc) typicky patrí pod kód \'85311030\' (Poplachové zabezpečovacie systémy na ochranu budov). "
         "Ak popis položky silno naznačuje, že ide o takýto komponent alarmového systému, uprednostni kód \'85311030\'. "
-        "Položky, ktoré sú príslušenstvom, doplnkom alebo sú priamo spojené s funkciou/identifikáciou alarmových systémov (napr. montážny materiál špecifický pre alarmy, informačné nálepky ALARM, batérie pre komponenty alarmu), by mali byť tiež klasifikované pod kód \'85311030\', pokiaľ pre ne neexistuje iný, jednoznačne vhodnejší a špecifickejší colný kód z poskytnutého zoznamu (napr. špecifický kód pre batérie ako \'8506xxxx\' alebo pre tlačené materiály ako \'4911xxxx\'). Ak však takýto špecifickejší kód nie je dostupný alebo vhodný, a položka jasne slúži systému pod kódom \'85311030\', použi \'85311030\' namiesto \'NEURCENE\'. "
+        "ŠPECIÁLNE PRAVIDLO PRE BATÉRIE A AKUMULÁTORY: Ak je položka identifikovaná ako batéria alebo akumulátor (napr. z popisu ako \'batéria\', \'akumulátor\', \'lithiová\', \'NiMH\', \'Li-ion\', alebo kódu produktu), VŽDY NAJPRV over, či pre ňu existuje špecifickejší a vhodnejší kód v kategóriách \'8506xxxx\' (primárne články a batérie) alebo \'8507xxxx\' (elektrické akumulátory) v poskytnutom zozname colných kódov. Ak takýto presný kód nájdeš a je vhodný, POUŽI HO. Ak nie je dostupný alebo vhodný špecifický kód pre batérie/akumulátory, potom zváž kód \'85311030\', ak batéria/akumulátor jednoznačne slúži ako komponent alarmového systému. Ak ani to nie je prípad, alebo ak ide o batériu pre iné zariadenie, vyber najvhodnejší iný kód, alebo \'NEURCENE\'. " # MODIFIED SECTION FOR BATTERIES
+        "Pre ostatné položky, ktoré sú príslušenstvom, doplnkom alebo sú priamo spojené s funkciou/identifikáciou alarmových systémov (napr. montážny materiál špecifický pre alarmy, informačné nálepky ALARM), by mali byť tiež klasifikované pod kód \'85311030\', pokiaľ pre ne neexistuje iný, jednoznačne vhodnejší a špecifickejší colný kód z poskytnutého zoznamu (napr. pre tlačené materiály ako \'4911xxxx\'). Ak však takýto špecifickejší kód nie je dostupný alebo vhodný, a položka jasne slúži systému pod kódom \'85311030\', použi \'85311030\' namiesto \'NEURCENE\'. "
         "Pre ostatné položky (napr. všeobecné káble, ktoré nie sú špecificky pre alarmy, bežný spojovací materiál) vyber najpresnejší kód podľa ich povahy. "
         "Zameraj sa na presnú zhodu s popisom položky a charakteristikami tovaru. "
         "Dôkladne zváž každý kód a jeho popis vo vzťahu k položke. Vysvetli stručne svoj postup v pár bodoch a na konci uveď iba samotný 8-miestny kód na novom riadku za textom 'VYSLEDNY_KOD: '.\\n"
         "Napríklad:\\n"
         "Zdôvodnenie: Položka je detektor pohybu, čo je súčasť alarmového systému.\\n"
         "VYSLEDNY_KOD: 85311030\\n\\n"
+        "ALEBO\\n"
+        "Zdôvodnenie: Položka je lítiová batéria CR2032.\\n"
+        "Zdôvodnenie: Najprv hľadám v 8506xxxx. Kód 85065010 (Lítiové primárne články a batérie) je vhodný.\\n"
+        "VYSLEDNY_KOD: 85065010\\n\\n"
         "ALEBO\\n"
         "Zdôvodnenie: Položka je kábel.\\n"
         "VYSLEDNY_KOD: 85444920\\n\\n"
@@ -544,7 +516,7 @@ def assign_customs_code_with_ai(item_details, all_customs_codes_map, genai_model
     try:
         response = genai_model_instance.generate_content(prompt)
         raw_response_text = response.text.strip()
-        # print(f"    DEBUG: Raw AI response for customs code assignment:\\n{raw_response_text}") # Log raw response # Already removed, kept for context
+        # print(f"    DEBUG: Raw AI response for customs code assignment:\\n{raw_response_text}")
 
         # Try to extract the code after "VYSLEDNY_KOD: "
         # Regex made more flexible for whitespace and potential newlines around the code itself.
@@ -554,32 +526,32 @@ def assign_customs_code_with_ai(item_details, all_customs_codes_map, genai_model
 
         if code_match:
             extracted_value = code_match.group(1).strip()
-            # print(f"    DEBUG: Regex matched. Extracted value: \'{extracted_value}\'") # Already removed
+            # print(f"    DEBUG: Regex matched. Extracted value: \'{extracted_value}\'")
             if re.fullmatch(r"[0-9]{8}", extracted_value):
                 if extracted_value in all_customs_codes_map:
                     assigned_code = extracted_value
-                    # print(f"    INFO: AI assigned valid code: {assigned_code}") # Removed
+                    # print(f"    INFO: AI assigned valid code: {assigned_code}")
                 else:
-                    print(f"    VAROVANIE: AI vrátil kód '{extracted_value}', ktorý má platný 8-miestny formát, ALE NIE JE v zozname známych colných kódov. Považuje sa za NEURCENE.") # Kept and already translated
-                    # print(f"    Full AI reasoning: {raw_response_text}") # Removed
+                    print(f"    VAROVANIE: AI vrátil kód '{extracted_value}', ktorý má platný 8-miestny formát, ALE NIE JE v zozname známych colných kódov. Považuje sa za NEURCENE.")
+                    # print(f"    Full AI reasoning: {raw_response_text}")
                     # assigned_code remains NEURCENE (default)
             elif extracted_value.upper() == "NEURCENE":
                 assigned_code = "NEURCENE"
-                # print(f"    INFO: AI explicitly assigned NEURCENE.") # Removed
+                # print(f"    INFO: AI explicitly assigned NEURCENE.")
             else:
-                print(f"    VAROVANIE: Regex extrahoval '{extracted_value}', čo nie je ani 8-miestny kód ani NEURCENE. Považuje sa za NEURCENE.") # Kept and already translated
-                # print(f"    Full AI reasoning: {raw_response_text}") # Removed
+                print(f"    VAROVANIE: Regex extrahoval '{extracted_value}', čo nie je ani 8-miestny kód ani NEURCENE. Považuje sa za NEURCENE.")
+                # print(f"    Full AI reasoning: {raw_response_text}")
                 # assigned_code remains NEURCENE (default)
         else:
-            print(f"    VAROVANIE: Regex nenašiel 'VYSLEDNY_KOD: XXXXXXXX' alebo 'VYSLEDNY_KOD: NEURCENE' v AI odpovedi. Považuje sa za NEURCENE.") # Kept and already translated
-            # print(f"    Full AI reasoning: {raw_response_text}") # Removed
+            print(f"    VAROVANIE: Regex nenašiel 'VYSLEDNY_KOD: XXXXXXXX' alebo 'VYSLEDNY_KOD: NEURCENE' v AI odpovedi. Považuje sa za NEURCENE.")
+            # print(f"    Full AI reasoning: {raw_response_text}")
             # assigned_code remains NEURCENE (default)
         
         return assigned_code, raw_response_text
 
     except Exception as e:
-        print(f"    CHYBA počas AI priradenia colného kódu: {e}") # Translated
-        return "NEURCENE", f"Chyba: {e}" # Translated error reason
+        print(f"    CHYBA počas AI priradenia colného kódu: {e}")
+        return "NEURCENE", f"Chyba: {e}"
 
 def adjust_item_weights_to_target_totals_with_ai(items_data_list, target_total_net_kg, target_total_gross_kg, calculated_preliminary_total_net_kg, genai_model_instance):
     """
@@ -692,12 +664,12 @@ def adjust_item_weights_to_target_totals_with_ai(items_data_list, target_total_n
         f"Dôkladne skontroluj súčty pred vrátením výsledku! Poskytni IBA JSON zoznam ako odpoveď, bez akéhokoľvek ďalšieho textu alebo vysvetlenia."
     )
 
-    # print(f"    ADJUST_AI: Prompt pre AI na úpravu hmotností:\\n{prompt}") # Removed
+    # print(f"    ADJUST_AI: Prompt pre AI na úpravu hmotností:\\n{prompt}")
 
     try:
         response = genai_model_instance.generate_content(prompt)
         raw_response_text = response.text.strip()
-        # print(f"    ADJUST_AI: Raw AI response for weight adjustment:\\n{raw_response_text}") # Removed
+        # print(f"    ADJUST_AI: Raw AI response for weight adjustment:\\n{raw_response_text}")
 
         # Clean the response if it's wrapped in ```json ... ```
         cleaned_json_text = raw_response_text

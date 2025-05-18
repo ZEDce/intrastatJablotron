@@ -64,7 +64,6 @@ def generate_single_report(input_csv_path, output_csv_name, df_sadz):
         return
 
     # --- Step 3: Data Cleaning and Transformation ---
-    # Expected columns from main.py's output (adjust if these names are different)
     numeric_cols = ['Total Gross Weight', 'Total Net Weight', 'Quantity', 'Total Price']
     # In main.py, these are 'Total Net Weight' and 'Total Gross Weight'. 'Quantity', 'Total Price'
     # The CSV from main.py has: 'Číslo Faktúry', 'Kód Položky', 'Názov Položky', 'Lokalita',
@@ -366,25 +365,24 @@ def prompt_and_generate_report(available_csvs_paths=None):
     Prompts the user to select a CSV file and generates a summary report for it.
     Uses functions imported from report.py.
     If available_csvs_paths is provided, it uses that list for selection. 
-    Otherwise, it lists all CSVs in REPORT_INPUT_DIR.
+    Otherwise, it lists all CSVs in INPUT_DIR.
     """
-    print("\\n--- Generovanie Súhrnného Reportu ---")
+    print("\n--- Generovanie Súhrnného Reportu ---")
     
     source_csv_paths_for_selection = []
     input_files_display_names = []
-    # REPORT_INPUT_DIR is imported and should point to "dovozy/"
-    # base_dir_for_paths_msg is used for user messages about where files are listed from.
+    base_dir_for_paths_msg = INPUT_DIR # Default
 
-    if available_csvs_paths: # If a specific list of CSVs is provided (e.g., just processed)
+    if available_csvs_paths:
         source_csv_paths_for_selection = available_csvs_paths
         input_files_display_names = [os.path.basename(p) for p in source_csv_paths_for_selection]
         base_dir_for_paths_msg = os.path.dirname(available_csvs_paths[0]) if available_csvs_paths else INPUT_DIR
     else: # If no specific list, list all CSVs in the default input directory for reports
         print(f"Prehľadávam adresár '{INPUT_DIR}' pre CSV súbory...")
-        all_filenames_in_dir = list_csv_files(INPUT_DIR) # From report.py, returns filenames
+        all_filenames_in_dir = list_csv_files(INPUT_DIR)
         input_files_display_names = all_filenames_in_dir
         source_csv_paths_for_selection = [os.path.join(INPUT_DIR, fname) for fname in all_filenames_in_dir]
-        base_dir_for_paths_msg = INPUT_DIR
+        # base_dir_for_paths_msg remains INPUT_DIR here
 
     if not input_files_display_names:
         print(f"Žiadne CSV súbory neboli nájdené na spracovanie v adresári '{base_dir_for_paths_msg}'.")
@@ -413,7 +411,7 @@ def prompt_and_generate_report(available_csvs_paths=None):
         except ValueError:
             print("Neplatný vstup. Zadajte číslo.")
 
-    if not selected_csv_full_path: # Should not be reached if loop breaks correctly
+    if not selected_csv_full_path: # If 'cancel' was chosen or loop exited unexpectedly.
         return
 
     # Prepare default output name for the summary report
@@ -426,12 +424,11 @@ def prompt_and_generate_report(available_csvs_paths=None):
         final_output_report_name += ".csv"
 
     print("Načítavam colné kódy pre report...")
-    df_sadz = get_customs_code_descriptions() # From report.py
+    df_sadz = get_customs_code_descriptions()
     if df_sadz.empty:
         print("Varovanie: Colné kódy neboli načítané. Report bude pokračovať bez popisov colných kódov.")
 
     print(f"Generujem report pre {selected_csv_full_path} -> {final_output_report_name}...")
-    # generate_single_report (from report.py) handles saving to its defined OUTPUT_DIR
     generate_single_report(selected_csv_full_path, final_output_report_name, df_sadz)
 
 if __name__ == "__main__":

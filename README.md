@@ -1,71 +1,107 @@
 # Nástroj na Spracovanie Faktúr a Generovanie Intrastat Reportov
 
-Tento nástroj automatizuje extrakciu dát z PDF faktúr, priradenie colných kódov, úpravu hmotností položiek a následné generovanie súhrnných CSV reportov pre potreby Intrastatu.
+Tento nástroj automatizuje extrakciu dát z PDF faktúr, priradenie colných kódov, úpravu hmotností položiek a následné generovanie súhrnných CSV reportov pre potreby Intrastatu. Využíva umelú inteligenciu (Google Gemini) na analýzu dokumentov a dát.
 
 ## Kľúčové Funkcie
 
-*   **Extrakcia dát z PDF:** Pomocou AI (Google Gemini) extrahuje položky, množstvá, ceny a ďalšie údaje z PDF faktúr.
-*   **Priradenie Colných Kódov:** Automaticky priraďuje colné kódy k položkám pomocou AI a lokálneho zoznamu kódov.
-*   **Výpočet a Úprava Hmotností:** Vypočíta predbežné čisté hmotnosti a následne pomocou AI a používateľom zadaných celkových súčtov upraví čisté a hrubé hmotnosti pre každú položku.
-*   **Generovanie CSV Výstupov:** Vytvára CSV súbory so spracovanými dátami z faktúr.
-*   **Súhrnný Intrastat Report:** Generuje finálny CSV report zoskupený podľa colnej sadzby a krajiny pôvodu, pripravený pre Intrastat.
+*   **Extrakcia dát z PDF:** Pomocou AI (Google Gemini) extrahuje položky, množstvá, ceny, krajiny pôvodu a ďalšie údaje z PDF faktúr.
+*   **Priradenie Colných Kódov:** Automaticky priraďuje colné kódy k položkám pomocou AI a lokálneho zoznamu kódov (`data/col_sadz.csv`).
+*   **Výpočet a Úprava Hmotností:** Vypočíta predbežné čisté hmotnosti na základe dát z `data/product_weight.csv` a následne pomocou AI a používateľom zadaných celkových súčtov pre faktúru upraví čisté a hrubé hmotnosti pre každú položku.
+*   **Generovanie Detailných CSV Výstupov:** Vytvára CSV súbory so spracovanými dátami pre každú faktúru do priečinka `data_output/`. Popri každom CSV sa vytvára aj `.meta` súbor obsahujúci názov pôvodného PDF.
+*   **Súhrnný Intrastat Report:** Generuje finálny súhrnný CSV report (ukladaný do `dovozy/`) z vybraného spracovaného CSV súboru. Tento report zoskupuje dáta podľa colnej sadzby a krajiny pôvodu.
+*   **Archivácia Spracovaných Dát:** Po vygenerovaní súhrnného reportu sa zdrojový CSV súbor a jeho `.meta` súbor presunú z `data_output/` do `data_output_archiv/`.
+
+## Požiadavky
+
+*   Python (odporúčaná verzia 3.9+, testované na 3.11)
+*   Platný Google API kľúč s prístupom k Gemini API.
 
 ## Inštalácia a Príprava
 
-1.  **Python:** Uistite sa, že máte nainštalovaný Python (verzia 3.7+).
-2.  **Knižnice:** Otvorte terminál/príkazový riadok v priečinku projektu a spustite:
+1.  **Naklonujte repozitár:**
+    ```bash
+    git clone <URL_REPOZITARA>
+    cd <NAZOV_PRIECINKA_REPOZITARA>
+    ```
+2.  **(Odporúčané) Vytvorte a aktivujte virtuálne prostredie:**
+    ```bash
+    python -m venv venv
+    # Windows
+    venv\Scripts\activate
+    # macOS/Linux
+    source venv/bin/activate
+    ```
+3.  **Nainštalujte potrebné knižnice:**
     ```bash
     pip install -r requirements.txt
     ```
-3.  **Google API Kľúč:**
-    *   Vytvorte súbor `.env` v hlavnom priečinku projektu.
-    *   Vložte doň váš Google API kľúč: `GOOGLE_API_KEY=VAS_AKTUALNY_API_KLUC`
-4.  **Vstupné Súbory (v priečinku `data/`):
-    *   **PDF Faktúry:** Vložte všetky PDF faktúry, ktoré chcete spracovať, do podpriečinka `invoices/`.
-    *   `data/product_weight.csv`: Súbor s jednotkovými hmotnosťami produktov (formát: `kod_produktu;hmotnost_s_des_ciarkou`, oddelené bodkočiarkou).
-    *   `data/col_sadz.csv`: Súbor s colnými kódmi a ich popismi (formát: `kod_colnej_sadzby;Popis`, oddelené bodkočiarkou).
+4.  **Nastavte Google API Kľúč:**
+    *   Vytvorte súbor `.env` v hlavnom (root) priečinku projektu.
+    *   Do súboru vložte váš Google API kľúč v nasledujúcom formáte:
+        ```
+        GOOGLE_API_KEY=VAS_AKTUALNY_API_KLUC
+        ```
+5.  **Pripravte vstupné súbory a priečinky:**
+    *   **PDF Faktúry:** Vložte PDF faktúry, ktoré chcete spracovať, do priečinka `faktury_na_spracovanie/`.
+    *   **Dáta pre hmotnosti:** Vytvorte/upravte súbor `data/product_weight.csv`.
+        *   Formát: `Registrační číslo;JV Váha komplet SK` (napr. `KOD123;1.234`)
+        *   Oddelovač: Bodkočiarka (`;`)
+        *   Desatinné miesta: Čiarka (`,`)
+    *   **Dáta pre colné sadzby:** Vytvorte/upravte súbor `data/col_sadz.csv`.
+        *   Formát: `col_sadz;Popis` (napr. `85311030;Poplachové zabezpečovacie systémy...`)
+        *   Oddelovač: Bodkočiarka (`;`)
+        *   Kódovanie: UTF-8 (odporúča sa UTF-8 with BOM, ak sú problémy s diakritikou priamo z Excelu)
 
 ## Používanie Aplikácie
 
-Spustite hlavný skript z terminálu v priečinku projektu:
+Spustite hlavný skript z terminálu v koreňovom priečinku projektu:
 
 ```bash
 python main.py
 ```
 
-Zobrazí sa menu:
+Zobrazí sa menu s nasledujúcimi možnosťami:
 
 1.  **Spracovať nové PDF faktúry:**
-    *   Skript spracuje PDF faktúry z `invoices/`.
-    *   Pre každú faktúru sa opýta na **cieľovú celkovú čistú a hrubú hmotnosť**.
-    *   Počas spracovania sa môžu zobraziť výzvy na manuálne doplnenie **krajiny pôvodu** pre niektoré položky, ak ju AI nedokáže extrahovať.
-    *   Výsledné CSV súbory s detailnými dátami pre každú faktúru sa uložia do `data_output/`.
-    *   Spracované PDF faktúry sa presunú do `processed_invoices/`.
+    *   Skript postupne spracuje všetky PDF faktúry nájdené v priečinku `faktury_na_spracovanie/`.
+    *   Pre každú faktúru (po extrakcii dát zo všetkých jej strán) sa program opýta na **cieľovú celkovú čistú a hrubú hmotnosť** danej faktúry.
+    *   Počas spracovania jednotlivých položiek faktúry sa môžu zobraziť výzvy na manuálne doplnenie **2-písmenového kódu krajiny pôvodu**, ak ju AI nedokáže spoľahlivo extrahovať.
+    *   Výsledné CSV súbory s detailnými dátami pre každú spracovanú faktúru (napr. `processed_invoice_data_NAZOV-FAKTURY.csv`) sa uložia do priečinka `data_output/`.
+    *   Popri každom CSV súbore sa uloží aj `.meta` súbor (napr. `processed_invoice_data_NAZOV-FAKTURY.csv.meta`) obsahujúci názov pôvodného PDF súboru.
+    *   Spracované PDF faktúry sa po úspešnom dokončení týchto krokov presunú z `faktury_na_spracovanie/` do `spracovane_faktury/`.
 
-2.  **Generovať súhrnný report z CSV:**
-    *   Umožní vybrať jeden z CSV súborov z `data_output/`.
-    *   Vygeneruje súhrnný CSV report (napr. `summary_report_NAZOV.csv`) do priečinka `dovozy/`.
-    *   Tento report zoskupuje dáta podľa colnej sadzby a krajiny pôvodu, upravuje započítanie zliav a poplatkov a pridáva celkový súčtový riadok.
+2.  **Generovať súhrnné reporty z už spracovaných dát:**
+    *   Skript (modul `report.py`) ponúkne na výber CSV súbory z priečinka `data_output/`.
+    *   Po výbere súboru a zadaní názvu výstupného reportu sa vygeneruje súhrnný CSV report (napr. `summary_report_NAZOV.csv`) do priečinka `dovozy/`.
+    *   Tento report zoskupuje dáta podľa colnej sadzby a krajiny pôvodu, upravuje započítanie zliav a manipulačných poplatkov a pridáva celkový súčtový riadok "Spolu".
+    *   Po úspešnom vygenerovaní reportu sa použitý CSV súbor a jeho príslušný `.meta` súbor presunú z `data_output/` do `data_output_archiv/`.
 
-3.  **Zobraziť colné kódy:**
-    *   Zobrazí zoznam colných kódov načítaných zo súboru `data/col_sadz.csv`.
-
-4.  **Ukončiť:** Ukončí aplikáciu.
+3.  **Ukončiť:** Ukončí aplikáciu.
 
 ## Štruktúra Priečinkov
 
-*   `invoices/`: Sem umiestnite vstupné PDF faktúry.
-*   `data/`: Obsahuje pomocné CSV súbory (`product_weight.csv`, `col_sadz.csv`).
-*   `data_output/`: Sem sa ukladajú CSV súbory vygenerované po spracovaní jednotlivých faktúr (výstup z `main.py`).
-*   `dovozy/`: Sem sa ukladajú finálne súhrnné CSV reporty (výstup z `report.py`).
-*   `pdf_images/`: Dočasný priečinok pre obrázky strán PDF počas spracovania (automaticky sa čistí).
-*   `processed_invoices/`: Sem sa presúvajú PDF faktúry po úspešnom spracovaní.
+*   `main.py`: Hlavný spúšťací skript pre spracovanie PDF faktúr.
+*   `report.py`: Modul a skript pre generovanie súhrnných reportov.
+*   `requirements.txt`: Zoznam potrebných Python knižníc.
+*   `.env`: Súbor pre uloženie Google API kľúča (ignorovaný Gitom).
+*   `data/`:
+    *   `product_weight.csv`: CSV súbor s kódmi produktov a ich jednotkovými hmotnosťami.
+    *   `col_sadz.csv`: CSV súbor s colnými kódmi (sadzbami) a ich popismi.
+*   `faktury_na_spracovanie/`: Vstupný priečinok pre PDF faktúry určené na spracovanie.
+*   `data_output/`: Priečinok, kam `main.py` ukladá spracované dáta z jednotlivých faktúr vo formáte CSV, spolu s `.meta` súbormi.
+*   `dovozy/`: Priečinok, kam `report.py` ukladá finálne súhrnné CSV reporty.
+*   `spracovane_faktury/`: Priečinok, kam `main.py` presúva PDF faktúry po ich úspešnom spracovaní a uložení dát.
+*   `data_output_archiv/`: Priečinok, kam `report.py` presúva CSV súbory (a ich `.meta` súbory) z `data_output/` po tom, čo boli použité na generovanie súhrnného reportu.
+*   `pdf_images/`: Dočasný priečinok pre obrázky extrahované zo stránok PDF počas spracovania. Obsah sa môže premazávať.
+*   `venv/`: (Odporúčané) Priečinok pre Python virtuálne prostredie (ignorovaný Gitom).
 
 ## Dôležité Poznámky
 
-*   Kvalita extrakcie dát závisí od kvality PDF faktúr a presnosti Gemini API.
-*   Pravidelne kontrolujte aktuálnosť súborov `product_weight.csv` a `col_sadz.csv`.
-*   Používanie Google Gemini API môže byť spoplatnené. Sledujte svoje využitie v Google Cloud Console.
+*   Kvalita extrakcie dát z PDF a presnosť priradenia colných kódov či úpravy hmotností závisí od kvality vstupných PDF faktúr a schopností použitého AI modelu (Gemini).
+*   Dôkladne skontrolujte a udržiavajte aktuálne dáta v súboroch `data/product_weight.csv` a `data/col_sadz.csv`, vrátane ich správneho formátovania (oddelovače, kódovanie).
+*   Používanie Google Gemini API môže byť spoplatnené. Sledujte svoje využitie a náklady v Google Cloud Console.
+*   Pred prvým spustením sa uistite, že všetky potrebné priečinky existujú, alebo ich skripty vytvoria (väčšina by sa mala vytvoriť automaticky pri prvom použití).
 
----
-*Technické detaily a presné odhady nákladov na API boli z pôvodného README odstránené pre stručnosť. V prípade potreby je možné nahliadnuť do histórie verzií súboru alebo konzultovať s vývojárom.*
+## Licencia
+
+Tento projekt je distribuovaný pod licenciou uvedenou v súbore `LICENSE`.
