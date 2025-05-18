@@ -1,0 +1,2 @@
+# Tento súbor zabezpečuje, že priečinok spracovane_faktury/ zostane v Git repozitári.
+# Jeho obsah je inak ignorovaný súborom .gitignore. 
