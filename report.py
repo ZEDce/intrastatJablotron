@@ -1,3 +1,8 @@
+"""
+Report generator for Intrastat declarations.
+Process CSV files with invoice data and generate summary reports.
+"""
+
 import pandas as pd
 import os
 import re
@@ -16,6 +21,20 @@ SOURCE_PROCESSED_PDF_DIR = "spracovane_faktury/"
 # ARCHIV_FAKTUR_S_REPORTOM_DIR is no longer needed as per user request.
 # # New directory for PDFs after a report has been generated from their data
 # ARCHIV_FAKTUR_S_REPORTOM_DIR = "archiv_faktur_s_reportom/"
+
+def round_report_values(df):
+    """Zaokrúhľuje všetky číselné hodnoty v reporte na správny počet desatinných miest."""
+    # Zaokrúhli hmotnosti a ceny na 2 desatinné miesta
+    numeric_columns = ['Súčet Hrubá Hmotnosť', 'Súčet Čistá Hmotnosť', 'Súčet Celková Cena']
+    for col in numeric_columns:
+        if col in df.columns:
+            df[col] = df[col].round(2)
+    
+    # Zaokrúhli množstvo na 1 desatinné miesto
+    if 'Súčet Počet Kusov' in df.columns:
+        df['Súčet Počet Kusov'] = df['Súčet Počet Kusov'].round(1)
+    
+    return df
 
 def list_csv_files(directory):
     """Lists CSV files in the specified directory."""
@@ -219,18 +238,22 @@ def generate_single_report(input_csv_path, output_csv_name, df_sadz):
         (report_df['Súčet Celková Cena'] == 0)
     )]
 
-    # --- Step 7: Adding the "Spolu" (Grand Total) Row ---
+    # --- Step 7: Zaokrúhľovanie a Spolu riadok ---
+    # Najprv zaokrúhli všetky hodnoty
+    report_df = round_report_values(report_df)
+    
+    # Vytvor "Spolu" riadok so zaokrúhlenými hodnotami
     spolu_row = {
-        'Colná sadzba': 'Spolu', # Matches the renamed 'Colný kód'
+        'Colná sadzba': 'Spolu',
         'Krajina Pôvodu': '',
-        'Súčet Hrubá Hmotnosť': report_df['Súčet Hrubá Hmotnosť'].sum(),
-        'Súčet Čistá Hmotnosť': report_df['Súčet Čistá Hmotnosť'].sum(),
-        'Súčet Počet Kusov': report_df['Súčet Počet Kusov'].sum(),
-        'Súčet Celková Cena': report_df['Súčet Celková Cena'].sum()
+        'Súčet Hrubá Hmotnosť': round(report_df['Súčet Hrubá Hmotnosť'].sum(), 2),
+        'Súčet Čistá Hmotnosť': round(report_df['Súčet Čistá Hmotnosť'].sum(), 2),
+        'Súčet Počet Kusov': round(report_df['Súčet Počet Kusov'].sum(), 1),
+        'Súčet Celková Cena': round(report_df['Súčet Celková Cena'].sum(), 2)
     }
-    # Use pd.concat instead of append for future compatibility
+    
+    # Pridaj "Spolu" riadok
     report_df = pd.concat([report_df, pd.DataFrame([spolu_row])], ignore_index=True)
-
 
     # --- Step 8: Saving the Report ---
     if not os.path.exists(OUTPUT_DIR):

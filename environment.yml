@@ -1,0 +1,16 @@
+name: intrastat-jablotron
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.11
+  - pip
+  - pandas
+  - pillow
+  - tqdm
+  - jupyter
+  - ipython
+  - pip:
+    - PyMuPDF
+    - google-generativeai
+    - python-dotenv 
