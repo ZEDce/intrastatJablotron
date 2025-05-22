@@ -305,7 +305,7 @@ def generate_single_report(input_csv_path, output_csv_name, df_sadz):
             os.makedirs(DATA_OUTPUT_ARCHIV_DIR, exist_ok=True)
             # Move .csv file to archive
             shutil.move(input_csv_path, os.path.join(DATA_OUTPUT_ARCHIV_DIR, os.path.basename(input_csv_path)))
-            print(f"Úspešne archivovaný spracovaný CSV súbor: {os.path.join(DATA_OUTPUT_ARCHIV_DIR, os.path.basename(input_csv_path))}")
+            # print(f"Úspešne archivovaný spracovaný CSV súbor: {os.path.join(DATA_OUTPUT_ARCHIV_DIR, os.path.basename(input_csv_path))}") # User requested less verbose output
         except Exception as e:
             print(f"Chyba pri archivácii spracovaného CSV súboru {input_csv_path} do {DATA_OUTPUT_ARCHIV_DIR}: {e}")
     else:
@@ -401,7 +401,7 @@ def prompt_and_generate_report(available_csvs_paths=None):
         input_files_display_names = [os.path.basename(p) for p in source_csv_paths_for_selection]
         base_dir_for_paths_msg = os.path.dirname(available_csvs_paths[0]) if available_csvs_paths else INPUT_DIR
     else: # If no specific list, list all CSVs in the default input directory for reports
-        print(f"Prehľadávam adresár '{INPUT_DIR}' pre CSV súbory...")
+        # print(f"Prehľadávam adresár '{INPUT_DIR}' pre CSV súbory...") # User requested less verbose output
         all_filenames_in_dir = list_csv_files(INPUT_DIR)
         input_files_display_names = all_filenames_in_dir
         source_csv_paths_for_selection = [os.path.join(INPUT_DIR, fname) for fname in all_filenames_in_dir]
@@ -446,7 +446,7 @@ def prompt_and_generate_report(available_csvs_paths=None):
     if not final_output_report_name.lower().endswith(".csv"):
         final_output_report_name += ".csv"
 
-    print("Načítavam colné kódy pre report...")
+    # print("Načítavam colné kódy pre report...") # User requested less verbose output
     df_sadz = get_customs_code_descriptions()
     if df_sadz.empty:
         print("Varovanie: Colné kódy neboli načítané. Report bude pokračovať bez popisov colných kódov.")

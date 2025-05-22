@@ -1,5 +1,0 @@
-PyMuPDF
-google-generativeai
-Pillow
-python-dotenv
-pandas 
