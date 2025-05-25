@@ -239,20 +239,23 @@ def generate_single_report(input_csv_path, output_csv_name, df_sadz):
     )]
 
     # --- Step 7: Zaokrúhľovanie a Spolu riadok ---
-    # Najprv zaokrúhli všetky hodnoty
-    report_df = round_report_values(report_df)
+    # Vypočítaj "Spolu" riadok z pôvodných (nezaokrúhlených) agregovaných hodnôt
+    # report_df v tomto bode obsahuje výsledky z df.groupby(...).agg(...)
+    # tieto hodnoty by mali byť ešte presné (nezaokrúhlené na 2 des. miesta)
     
-    # Vytvor "Spolu" riadok so zaokrúhlenými hodnotami
     spolu_row = {
         'Colná sadzba': 'Spolu',
         'Krajina Pôvodu': '',
         'Súčet Hrubá Hmotnosť': round(report_df['Súčet Hrubá Hmotnosť'].sum(), 2),
         'Súčet Čistá Hmotnosť': round(report_df['Súčet Čistá Hmotnosť'].sum(), 2),
-        'Súčet Počet Kusov': round(report_df['Súčet Počet Kusov'].sum(), 1),
+        'Súčet Počet Kusov': round(report_df['Súčet Počet Kusov'].sum(), 1), # Množstvo sa zaokrúhľuje na 1 des. miesto
         'Súčet Celková Cena': round(report_df['Súčet Celková Cena'].sum(), 2)
     }
     
-    # Pridaj "Spolu" riadok
+    # Teraz zaokrúhli hodnoty v jednotlivých riadkoch pre zobrazenie
+    report_df = round_report_values(report_df)
+    
+    # Pridaj "Spolu" riadok (ktorý bol vypočítaný z presnejších súčtov)
     report_df = pd.concat([report_df, pd.DataFrame([spolu_row])], ignore_index=True)
 
     # --- Step 8: Saving the Report ---
@@ -305,7 +308,7 @@ def generate_single_report(input_csv_path, output_csv_name, df_sadz):
             os.makedirs(DATA_OUTPUT_ARCHIV_DIR, exist_ok=True)
             # Move .csv file to archive
             shutil.move(input_csv_path, os.path.join(DATA_OUTPUT_ARCHIV_DIR, os.path.basename(input_csv_path)))
-            # print(f"Úspešne archivovaný spracovaný CSV súbor: {os.path.join(DATA_OUTPUT_ARCHIV_DIR, os.path.basename(input_csv_path))}") # User requested less verbose output
+           
         except Exception as e:
             print(f"Chyba pri archivácii spracovaného CSV súboru {input_csv_path} do {DATA_OUTPUT_ARCHIV_DIR}: {e}")
     else:
