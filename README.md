@@ -97,39 +97,39 @@ python main.py
 ==================================================
 ```
 
-## 🏗️ Architektúra
+🏗️ Architektúra
 
-### Core Components
+ Core Components
 
-#### 🎯 InvoiceProcessor
+ 🎯 InvoiceProcessor
 Hlavný orchestrátor celého workflow:
 - Koordinuje všetky komponenty
 - Progress tracking s tqdm
 - Metrics collection
 - Error recovery
 
-#### 🤖 GeminiAnalyzer
+🤖 GeminiAnalyzer
 AI management s pokročilými funkciami:
 - Rate limiting pre API volania
 - Connection pooling
 - Response parsing s error handling
 - Custom prompts pre rôzne úlohy
 
-#### 📄 PDFProcessor
+📄 PDFProcessor
 Memory-efficient PDF spracovanie:
 - Generator-based processing
 - Image cleanup utilities
 - PDF metadata extraction
 - Configurable DPI settings
 
-#### 💾 DataManager
+💾 DataManager
 Centralizované dátové operácie:
 - Cached CSV loaders
 - Data validation
 - Error reporting
 - BOM handling
 
-### 🛡️ Error Handling System
+🛡️ Error Handling System
 
 ```python
 # Custom exception hierarchy
@@ -145,7 +145,7 @@ IntrastatError
 └── RateLimitExceededError  # API rate limiting
 ```
 
-### 📊 Logging System
+📊 Logging System
 
 ```python
 # Hierarchické logging s rotáciou
@@ -158,7 +158,7 @@ logs/
 # Timestamp + Module + Level + Message format
 ```
 
-### ⚙️ Configuration Management
+⚙️ Configuration Management
 
 ```python
 # AppSettings dataclass s environment support
@@ -176,16 +176,16 @@ class AppSettings:
         # Vytvorenie potrebných adresárov
 ```
 
-## 📈 Performance Optimizations
+📈 Performance Optimizations
 
-### 🔄 Rate Limiting
+🔄 Rate Limiting
 ```python
 @rate_limit(calls_per_minute=30)
 def ai_api_call(self, ...):
     # Automatické rate limiting pre AI volania
 ```
 
-### 💾 Memory Management
+💾 Memory Management
 ```python
 def pdf_to_images_generator(self, pdf_path):
     # Generator pattern pre memory-efficient processing
@@ -194,7 +194,7 @@ def pdf_to_images_generator(self, pdf_path):
         # Automatické uvoľnenie pamäte
 ```
 
-### 🏪 Caching
+🏪 Caching
 ```python
 class DataManager:
     def get_product_weights(self, force_reload=False):
@@ -203,9 +203,9 @@ class DataManager:
         return self._weights_cache
 ```
 
-## 🔍 Monitoring & Metrics
+🔍 Monitoring & Metrics
 
-### 📊 Processing Metrics
+📊 Processing Metrics
 ```python
 class ProcessingMetrics:
     - processed_pdfs: int           # Úspešne spracované
@@ -216,7 +216,7 @@ class ProcessingMetrics:
     - avg_time_per_pdf: float      # Priemerný čas na PDF
 ```
 
-### 📋 Data Validation Reports
+📋 Data Validation Reports
 ```python
 validation_results = {
     "product_weights": True/False,
@@ -225,9 +225,9 @@ validation_results = {
 # Detailné error reporting pre každý súbor
 ```
 
-## 🛠️ Advanced Features
+🛠️ Advanced Features
 
-### 🎯 Smart Input Validation
+🎯 Smart Input Validation
 ```python
 # Validácia na všetkých úrovniach
 validate_pdf_file(file_path, max_size_mb=50)
@@ -236,13 +236,13 @@ validate_customs_code("85311030")  # 8-digit format
 validate_weight("123,45")  # Slovak decimal format support
 ```
 
-### 🤖 Enhanced AI Prompts
+🤖 Enhanced AI Prompts
 - Špecializované prompty pre invoice analysis
 - Pokročilé customs code assignment s context
 - Weight adjustment s precision targeting
 - Hardcoded overrides pre špecifické produkty
 
-### 📊 Progress Tracking
+📊 Progress Tracking
 ```python
 # Real-time progress s tqdm
 with tqdm(total=len(pdf_files), desc="Spracovávam PDF") as pbar:
@@ -252,104 +252,6 @@ with tqdm(total=len(pdf_files), desc="Spracovávam PDF") as pbar:
         pbar.update(1)
 ```
 
-## 🔧 Migration Guide
-
-### Z Pôvodnej Verzie na Refaktorovanú
-
-1. **Backup dát**:
-   ```bash
-   cp -r data_output/ data_output_backup/
-   cp -r spracovane_faktury/ spracovane_faktury_backup/
-   ```
-
-2. **Environment setup**:
-   ```bash
-   # Vytvorte .env súbor s API kľúčom
-   echo "GOOGLE_API_KEY=your_key_here" > .env
-   ```
-
-3. **Testovanie**:
-   ```bash
-   # Použite malý test PDF najprv
-   python main_new.py
-   ```
-
-4. **Postupná migrácia**:
-   - Refaktorovaná verzia je plne kompatibilná s existujúcimi dátami
-   - Pôvodný `main.py` zostáva funkčný pre backward compatibility
-   - Postupne presúvajte workflow na `main_new.py`
-
-## 🐛 Troubleshooting
-
-### Časté Problémy
-
-1. **Import Error**: `ModuleNotFoundError: No module named 'src'`
-   ```bash
-   # Riešenie: Spustite z root adresára projektu
-   cd /path/to/intrastatJablotron
-   python main_new.py
-   ```
-
-2. **API Rate Limiting**: `RateLimitExceededError`
-   ```bash
-   # Riešenie: Nastavte nižší rate limit v .env
-   echo "AI_RATE_LIMIT_PER_MINUTE=20" >> .env
-   ```
-
-3. **Memory Issues**: Pri veľkých PDF súboroch
-   ```bash
-   # Riešenie: Znížte DPI v .env
-   echo "PDF_DPI=150" >> .env
-   ```
-
-4. **Logging Issues**: Problémy s UTF-8
-   ```bash
-   # Riešenie: Nastavte správne locale
-   export LANG=en_US.UTF-8
-   export LC_ALL=en_US.UTF-8
-   ```
-
-### 📋 Debug Mode
-
-```bash
-# Nastavte DEBUG level pre detailné logy
-echo "LOG_LEVEL=DEBUG" >> .env
-python main_new.py
-
-# Skontrolujte logs
-tail -f logs/intrastat.log
-tail -f logs/errors.log
-```
-
-## 🎯 Best Practices
-
-### 1. **Environment Management**
-```bash
-# Používajte .env súbor pre konfiguráciu
-# Nikdy necommitujte API kľúče do git
-echo ".env" >> .gitignore
-```
-
-### 2. **Monitoring**
-```bash
-# Pravidelne kontrolujte logy
-tail -f logs/intrastat.log
-
-# Sledujte metrics cez menu option 5
-```
-
-### 3. **Data Backup**
-```bash
-# Pred väčšími zmenami backupujte dáta
-cp -r data_output/ backup_$(date +%Y%m%d)/
-```
-
-### 4. **Performance Tuning**
-```bash
-# Pre veľké objemy nastavte batch processing
-echo "BATCH_SIZE=3" >> .env
-echo "AI_RATE_LIMIT_PER_MINUTE=20" >> .env
-```
 
 ## 🚀 Budúce Vylepšenia
 
@@ -373,7 +275,6 @@ echo "AI_RATE_LIMIT_PER_MINUTE=20" >> .env
 ## 📞 Support
 
 ### Dokumentácia
-- **Audit Report**: `audit.md` - detailná analýza zlepšení
 - **Original README**: `README.md` - pôvodná dokumentácia
 - **Config Reference**: `src/config.py` - všetky nastavenia
 
@@ -396,4 +297,4 @@ Refaktorovaná verzia predstavuje významný upgrade v kvalite, maintainability 
 - ✅ **Monitoring a metrics** pre operational insight
 - ✅ **Backward compatibility** s existujúcimi dátami
 
-Začnite s `python main_new.py` a zažite rozdiel! 🚀 
+Začnite s `python main.py` a zažite rozdiel! 🚀 
