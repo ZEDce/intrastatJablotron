@@ -11,7 +11,7 @@ from tqdm import tqdm
 from ..config import AppSettings, DEFAULT_CSV_HEADERS, NON_PRODUCT_KEYWORDS
 from ..data.csv_loader import DataManager
 from ..models.pdf_processor import PDFProcessor
-from ..models.ai_analyzer import GeminiAnalyzer
+from ..models.ai_analyzer import GeminiAnalyzer, COUNTRY_ORIGIN_OVERRIDES
 from ..utils.exceptions import IntrastatError, PDFProcessingError, AIAnalysisError
 from ..utils.validators import validate_country_code, validate_weight, validate_quantity
 from ..utils.logging_config import get_logger, ProcessingMetrics
@@ -294,7 +294,13 @@ class InvoiceProcessor:
                     return ai_loc_str
             return ""
         
-        # Pre produkty
+        # Najprv skontroluj hardcoded overrides pre krajiny
+        if item_identifier in COUNTRY_ORIGIN_OVERRIDES:
+            override_country = COUNTRY_ORIGIN_OVERRIDES[item_identifier]
+            logger.info(f"Použitý hardcoded override pre krajinu {item_identifier}: {override_country}")
+            return override_country
+        
+        # Pre produkty - kontrola AI location
         if ai_location:
             ai_loc_str = str(ai_location).strip().upper()
             if re.fullmatch(r"[A-Z]{2}", ai_loc_str):

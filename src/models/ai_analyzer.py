@@ -52,6 +52,39 @@ CUSTOMS_CODE_OVERRIDES = {
     "JA-194Y": "85311030"   # LTE komunikátor
 }
 
+# Hardcoded country of origin overrides for Jablotron products
+COUNTRY_ORIGIN_OVERRIDES = {
+    # Batérie - často z Číny/Japonska
+    "BAT-100A": "CZ",
+    "BAT-1V5-AA.01": "SG", 
+    "BAT-3V0-CR123A.0": "CN",
+    "BAT-3V0-CR2032.01": "JP",
+    "BAT-4V8": "CN",
+    "BAT-6": "CN",
+    
+    # JA série - Jablotron produkty z Česka
+    "JA-103KR": "CZ",
+    "JA-107KR": "CZ", 
+    "JA-110A": "CZ",
+    "JA-110G-CO": "CZ",
+    "JA-110ST": "CZ",
+    "JA-111R": "CZ",
+    "JA-112P": "CZ",
+    "JA-120Z": "CZ",
+    "JA-150P": "CZ",
+    "JA-152P": "CZ",
+    "JA-165A": "CZ",
+    "JA-192Y": "CZ",
+    "JA-194Y": "CZ",
+    "JA-196J": "CZ",
+    
+    # SA série
+    "SA-210": "CN",
+    
+    # CZ série - Jablotron Czech
+    "CZ-1263.1": "CZ",
+}
+
 
 class AIModelManager:
     """Manager pre AI modely s connection pooling."""
@@ -426,29 +459,54 @@ class GeminiAnalyzer:
     def _get_invoice_analysis_prompt(self) -> str:
         """Vráti prompt pre analýzu faktúry."""
         return """
-Analyze the provided invoice image to extract structured data.
-The invoice contains information about items, quantities, prices, and potentially an overall invoice number.
+Analyze this Jablotron invoice image to extract structured data for each item/product.
+This is a Czech company invoice containing security system components.
+
 Please return the data in JSON format with the following structure:
 {
-  "invoice_number": "INV12345", // Extract if present, otherwise use "N/A"
+  "invoice_number": "INV12345", // Extract invoice number if present, otherwise use "N/A"
   "items": [
     {
-      "item_code": "CODE123", // Product code or registration number, if available
+      "item_code": "CODE123", // Product code (e.g., BAT-100A, JA-103KR, CZ-1263.1)
       "item_name": "Product Name Example", // Full name of the item
       "description": "Detailed description of the item",
       "quantity": 10, // Number of units. Must be a number.
       "unit_price": 25.99, // Price per unit. Must be a number.
       "total_price": 259.90, // Total price for the item
-      "location": "COUNTRY CODE (e.g., CZ, GB, CN). Search for 2-letter ISO code or 'Made in [Country]'. If genuinely ABSENT, use 'NOT_ON_IMAGE'.",
+      "location": "COUNTRY CODE", // See detailed instructions below
       "currency": "EUR" // Currency code
     }
   ]
 }
 
-Instructions:
-- Ensure all numeric fields are numbers, not strings. Use dot (.) as decimal separator.
-- For "location": This field is ESSENTIAL. Find country of origin for EVERY item.
-- Return ONLY the JSON structure. No other text.
+CRITICAL INSTRUCTIONS FOR "location" FIELD:
+This field is ESSENTIAL for customs declarations. For EVERY item, find the country of origin using these strategies:
+
+1. LOOK FOR EXPLICIT COUNTRY CODES: Search for 2-letter ISO codes like "CZ", "CN", "DE", "JP", "SG", "GB", "US" anywhere on the invoice
+2. LOOK FOR "MADE IN" TEXT: Search for text like "Made in China", "Vyrobeno v", "Origin:", "Country of origin"
+3. LOOK FOR COUNTRY NAMES: Search for full country names like "Czech Republic", "China", "Germany", "Japan", "Singapore"
+4. CHECK PRODUCT SECTIONS: Country information might be in product description areas, specification sections, or separate tables
+5. CHECK HEADERS/FOOTERS: Sometimes country info is in invoice headers, footers, or company information sections
+6. LOOK FOR SUPPLIER INFO: Check if supplier/manufacturer information includes country details
+
+COMMON JABLOTRON PRODUCT ORIGINS:
+- Czech products (CZ): JA-series items, many security components
+- Chinese products (CN): Batteries (BAT-series), some electronic components  
+- Japanese products (JP): Specialized batteries, sensors
+- Singapore products (SG): Some electronic components
+- German products (DE): Some specialized components
+
+If you find country information for ANY products, apply logical reasoning:
+- Similar product codes often have same origin (e.g., all BAT-series might be from same country)
+- Products from same manufacturer typically share origin
+
+ONLY use "NOT_ON_IMAGE" if you have thoroughly searched the ENTIRE invoice and genuinely cannot find ANY country information for a specific item.
+
+Return format requirements:
+- Ensure all numeric fields are numbers, not strings
+- Use dot (.) as decimal separator
+- For location: Use 2-letter ISO country codes (CZ, CN, DE, JP, SG, etc.)
+- Return ONLY the JSON structure, no other text
 """
     
     def _get_customs_code_prompt(self, item_details: Dict[str, Any], customs_codes_map: Dict[str, str]) -> str:

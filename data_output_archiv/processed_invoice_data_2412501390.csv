@@ -1,0 +1,4 @@
+﻿Page Number;Invoice Number;Item Name;description;Location;Quantity;Unit Price;Total Price;Preliminary Net Weight;Total Net Weight;Total Gross Weight;Colný kód;Popis colného kódu
+1;2412501390;CZ-1263.1;SIM 2FF/3FF/4FF Jablotron;CZ;5.0;1.0;5.0;0,050;;;85311030;Poplachové zariadenia na ochranu budov
+1;2412501390;SK-CZ100.1-SET;Startovací sada JA-100+;CZ;5.0;528.04;2640.2;NENÁJDENÉ;;;85311030;Poplachové zariadenia na ochranu budov
+1;2412501390;SLEVA;Sleva zákazníkovi, účtována tržby z pro;;1.0;-5.0;-5.0;;;;NEURCENE;Kód nebol určený AI

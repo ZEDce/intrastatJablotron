@@ -1,0 +1,49 @@
+﻿Page Number;Invoice Number;Item Name;description;Location;Quantity;Unit Price;Total Price;Preliminary Net Weight;Total Net Weight;Total Gross Weight;Colný kód;Popis colného kódu
+1;2412501491;AC-160-C;Bezdrátové multifunkční relé do montáž - (recyklační příspěvek 0,0065 EUR bez DPH / 1 kg);CZ;10.0;35.47;354.7;0,500;0,541;0,582;85311030;Poplachové zariadenia na ochranu budov
+1;2412501491;BAT-100A;Bateriový pack 3.6V 13Ah Lithiová bate;CZ;10.0;15.19;151.9;1,380;1,496;1,608;85065090;Baterie Lítiové ostatné
+1;2412501491;BAT-1V5-AA.01;Baterie Energizer Alkaline Power - AA;SG;200.0;0.32;64.0;NENÁJDENÉ;NENÁJDENÉ;NENÁJDENÉ;NEURCENE;Kód nebol určený AI
+1;2412501491;BAT-3V0-CR123A.0;Lithiová baterie typ CR123A (3,0 V / 1,;CN;100.0;1.41;141.0;NENÁJDENÉ;NENÁJDENÉ;NENÁJDENÉ;85065090;Baterie Lítiové ostatné
+1;2412501491;BAT-4V8;NiCd akumulátor 4,8 V / 1800 mAh;CN;12.0;5.04;60.48;2,280;2,470;2,655;85073080;Akumulátory Niklokadmiové ostatné
+1;2412501491;BAT-6;Alkalická baterie typ L1016 6,0 V;CN;25.0;0.35;8.75;0,050;0,054;0,058;85065090;Baterie Lítiové ostatné
+1;2412501491;CC-02;300 m Kabel sběrnice 2x2x24AWG nest;SK;4.0;64.09;256.36;28,920;31,331;33,670;85444920;Drôty a káble, izolované, používané v telekomunikáciach
+1;2412501491;CZ-1263.1;SIM 2FF/3FF/4FF Jablotron;CZ;27.0;1.0;27.0;0,270;0,292;0,314;85311030;Poplachové zariadenia na ochranu budov
+1;2412501491;GS-133;Detektor úniku plynu napaj.12VDC s rel - (recyklační příspěvek 0,0182 EUR bez DPH / 1 kg);CZ;8.0;26.17;209.36;1,360;1,474;1,585;85311030;Poplachové zariadenia na ochranu budov
+1;2412501491;JA-103K;Ústředna - (recyklační příspěvek 0,182 EUR bez DPH / 1 kg);CN;3.0;140.1;420.3;3,642;3,940;4,235;85311030;Poplachové zariadenia na ochranu budov
+1;2412501491;JA-103K-7AH;Ústředna s LAN komunikátorem s přípra - (recyklační příspěvek 0,299 EUR bez DPH / 1 kg);CN;3.0;153.9;461.7;6,432;6,964;7,487;85311030;Poplachové zariadenia na ochranu budov
+1;2412501491;JA-103KR;Ústředna s rádiovým modulem - (recyklační příspěvek 0,182 EUR bez DPH / 1 kg);CZ;15.0;189.1;2836.5;19,530;21,128;22,710;85311030;Poplachové zariadenia na ochranu budov
+1;2412501491;JA-107KR;Ústředna s rádiovým modulem - (recyklační příspěvek 0,2951 EUR bez DPH / 1 kg);CZ;6.0;256.19;1537.14;13,620;14,742;15,867;85311030;Poplachové zariadenia na ochranu budov
+1;2412501491;JA-110A;Sběrnicová vnitřní siréna - (recyklační příspěvek 0,0113229333333333 EUR bez DPH / 1 kg);CZ;15.0;13.43;201.45;1,440;1,559;1,676;85311030;Poplachové zariadenia na ochranu budov
+1;2412501491;JA-110A II;Sběrnicová vnitřní siréna se zálohou - (recyklační příspěvek 0,0143 EUR bez DPH / 1 kg);CZ;7.0;22.47;157.29;0,826;0,894;0,960;85311030;Poplachové zariadenia na ochranu budov
+1;2412501491;JA-110G-CO;Sběrnicový modul připojení CO detektor - (recyklační příspěvek 0,0104 EUR bez DPH / 1 kg);CZ;3.0;14.2;42.6;0,252;0,274;0,294;85311030;Poplachové zariadenia na ochranu budov
+2;2412501491;JA-110N-DIN;Sběrnicový silový modul - (recyklační příspěvek 0,00987975 EUR bez DPH / 1 kg);CZ;4.0;32.95;131.8;0,280;0,304;0,326;85311030;Poplachové zariadenia na ochranu budov
+2;2412501491;JA-110P;Sběrnicový PIR detektor pohybu - (recyklační příspěvek 0,012558 EUR bez DPH / 1 kg);CZ;70.0;14.75;1032.5;7,280;7,885;8,472;85311030;Poplachové zariadenia na ochranu budov
+2;2412501491;JA-110P PET;Sběrnicový detektor se základní imunitou - (recyklační příspěvek 0,013 EUR bez DPH / 1 kg);CZ;25.0;15.91;397.75;2,700;2,927;3,144;85311030;Poplachové zariadenia na ochranu budov
+2;2412501491;JA-110ST;Požární detektor kouře a teploty - (recyklační příspěvek 0,026 EUR bez DPH / 1 kg);CZ;10.0;23.73;237.3;2,020;2,191;2,355;85311030;Poplachové zariadenia na ochranu budov
+2;2412501491;JA-111A-BASE-RB;Základna s elektronikou pro sirénu JA- - (recyklační příspěvek 0,0884 EUR bez DPH / 1 kg);CN;12.0;32.53;390.36;NENÁJDENÉ;NENÁJDENÉ;NENÁJDENÉ;85311030;Poplachové zariadenia na ochranu budov
+2;2412501491;JA-111ST-A;Kombinovaný detektor kouře a teplot sb - (recyklační příspěvek 0,026 EUR bez DPH / 1 kg);CN;25.0;31.75;793.75;5,650;6,121;6,584;85311030;Poplachové zariadenia na ochranu budov
+2;2412501491;JA-111ST-A-AN;Kombinovaný detektor kouře a teplot;CN;5.0;31.75;158.75;NENÁJDENÉ;NENÁJDENÉ;NENÁJDENÉ;85311030;Poplachové zariadenia na ochranu budov
+2;2412501491;JA-114HN;Sběrnicový modul 4 vstupů a 4 výstupů - (recyklační příspěvek 0,005915 EUR bez DPH / 1 kg);CZ;5.0;47.95;239.75;0,310;0,336;0,361;85311030;Poplachové zariadenia na ochranu budov
+2;2412501491;JA-115P;Sběrnicový stropní PIR detektor pohybu - (recyklační příspěvek 0,0211249333333333 EUR bez DPH / 1 kg);CZ;15.0;26.19;392.85;2,760;2,990;3,213;85311030;Poplachové zariadenia na ochranu budov
+2;2412501491;JA-121E-BK;Sběrnicová klávesnice s čtečkou RFID / - (recyklační příspěvek 0,0286 EUR bez DPH / 1 kg);CZ;4.0;72.47;289.88;0,872;0,945;1,016;85311030;Poplachové zariadenia na ochranu budov
+2;2412501491;JA-150P;Bezdrátový PIR detektor pohybu - (recyklační příspěvek 0,013858 EUR bez DPH / 1 kg);CZ;15.0;39.82;597.3;1,770;1,919;2,063;85311030;Poplachové zariadenia na ochranu budov
+2;2412501491;JA-151ST;Bezdrátový kombinovaný detektor kouře - (recyklační příspěvek 0,0247 EUR bez DPH / 1 kg);CN;20.0;38.5;770.0;4,280;4,638;4,992;85311030;Poplachové zariadenia na ochranu budov
+2;2412501491;JA-151ST-A-AN;Kombinovaný detektor kouře a teplot;CN;5.0;54.47;272.35;NENÁJDENÉ;NENÁJDENÉ;NENÁJDENÉ;85311030;Poplachové zariadenia na ochranu budov
+2;2412501491;JA-153E-WH;Bezdrátový přístupový modul s klávesni - (recyklační příspěvek 0,0247 EUR bez DPH / 1 kg);CN;5.0;54.83;274.15;0,990;1,072;1,152;85311030;Poplachové zariadenia na ochranu budov
+2;2412501491;JA-154J MS II;Obousměrný čtyřtlačítkový ovladač - (recyklační příspěvek 0,0083914 EUR bez DPH / 1 kg);CN;10.0;28.07;280.7;0,610;0,660;0,710;85311030;Poplachové zariadenia na ochranu budov
+2;2412501491;JA-159P;Bezdrátový venkovní dvouzónový dete - (recyklační příspěvek 0,071175 EUR bez DPH / 1 kg);CZ;3.0;127.68;383.04;1,710;1,849;1,990;85311030;Poplachové zariadenia na ochranu budov
+2;2412501491;JA-182SH;Bezdrátový detektor otřesu nebo náklon - (recyklační příspěvek 0,0052 EUR bez DPH / 1 kg);CZ;2.0;22.06;44.12;0,096;0,104;0,113;85311030;Poplachové zariadenia na ochranu budov
+2;2412501491;JA-192E-WH;Ovládací segment přístupových modulů - (recyklační příspěvek 0,0039 EUR bez DPH / 1 kg);CN;40.0;3.86;154.4;1,040;1,126;1,211;85311030;Poplachové zariadenia na ochranu budov
+2;2412501491;JA-192Y;Modul GSM komunikátoru - (recyklační příspěvek 0,00623992307692308 EUR bez DPH / 1 kg);CZ;13.0;78.85;1025.05;0,572;0,621;0,668;85311030;Poplachové zariadenia na ochranu budov
+2;2412501491;JA-194Y;Modul LTE komunikátoru - (recyklační příspěvek 0,00613854545454545 EUR bez DPH / 1 kg);CZ;11.0;119.36;1312.96;0,594;0,643;0,692;85311030;Poplachové zariadenia na ochranu budov
+2;2412501491;JA-194Y-LITE;LTE komunikátor LITE - (recyklační příspěvek 0,00685066666666667 EUR bez DPH / 1 kg);CN;3.0;91.47;274.41;0,159;0,172;0,185;85311030;Poplachové zariadenia na ochranu budov
+2;2412501491;JA-196J;Duální přívěsek LF-HF UID - (recyklační příspěvek 0,000832 EUR bez DPH / 1 kg);CZ;20.0;3.65;73.0;0,120;0,130;0,140;85311030;Poplachové zariadenia na ochranu budov
+2;2412501491;JA-1X1A-C-AN;Plastový kryt venkovní sirény - antracito;CN;6.0;17.53;105.18;4,596;4,973;5,342;85311030;Poplachové zariadenia na ochranu budov
+2;2412501491;JB-110N;Sběrnicový silový modul výstupů PG - (recyklační příspěvek 0,00585 EUR bez DPH / 1 kg);CZ;10.0;17.6;176.0;0,440;0,476;0,512;85311030;Poplachové zariadenia na ochranu budov
+2;2412501491;JB-118N;Sběrnicový signální modul výstupů PG - - (recyklační příspěvek 0,0053624 EUR bez DPH / 1 kg);CZ;10.0;25.02;250.2;0,380;0,412;0,443;85311030;Poplachové zariadenia na ochranu budov
+2;2412501491;JS-7920;Alternativní šedá čočka pro JA-1x2P a J;CN;5.0;1.5;7.5;0,030;0,032;0,034;85311030;Poplachové zariadenia na ochranu budov
+2;2412501491;SA-201-A;Kontakt magnetický mini povrchový s vc;CN;1300.0;2.15;2795.0;13,000;14,084;15,146;85311030;Poplachové zariadenia na ochranu budov
+2;2412501491;SA214-18;Pb akumulátor (12 V / 18 Ah);TW;4.0;36.98;147.92;20,248;21,934;23,570;85072080;Akumulátory Olovené ostatné
+2;2412501491;SA214-2.6;Pb akumulátor (12 V / 2,6 Ah);CN;20.0;9.18;183.6;21,600;23,396;25,169;85072080;Akumulátory Olovené ostatné
+3;2412501491;SA214-7;Pb akumulátor (12 V / 7 Ah) - Pb akumulátor (12 V / 7 Ah);TW;8.0;15.05;120.4;19,384;20,963;22,546;85072080;Akumulátory Olovené ostatné
+3;2412501491;SLEVA;Sleva zákazníkovi, účtována tržby z pro - Sleva zákazníkovi, účtována tržby z pro;;1.0;-27.0;-27.0;;;;NEURCENE;Kód nebol určený AI
+3;2412501491;DOPRAVA;Manipulační poplatek - Manipulační poplatek;;1.0;162.5;162.5;;;;NEURCENE;Kód nebol určený AI
